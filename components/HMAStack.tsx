@@ -17,7 +17,15 @@ export const HMAStack: React.FC<HMAStackProps> = ({ bias, trends }) => {
   ];
 
   const getVisualData = (key: string) => {
-      const rawSlope = trends ? trends[key] : 'FLAT';
+      let rawSlope = trends ? trends[key] : 'FLAT';
+      
+      // Fallback for ZLMA or Legacy Keys
+      if ((!rawSlope || rawSlope === 'FLAT') && trends) {
+          if (key === 'Scalp') rawSlope = trends['ZLMA_Scalp'] || trends['HMA_Scalp'] || trends['15'] || 'FLAT';
+          if (key === 'Swing') rawSlope = trends['ZLMA_Swing'] || trends['HMA_Swing'] || trends['30'] || 'FLAT';
+          if (key === 'Trend') rawSlope = trends['ZLMA_Trend'] || trends['HMA_Trend'] || trends['60'] || 'FLAT';
+          if (key === 'Base')  rawSlope = trends['ZLMA_Base']  || trends['HMA_Base']  || trends['120'] || trends['240'] || 'FLAT';
+      }
       
       let slope = 'FLAT';
       if (typeof rawSlope === 'string') {

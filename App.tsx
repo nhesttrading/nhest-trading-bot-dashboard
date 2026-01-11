@@ -808,6 +808,9 @@ export default function NhestTradingBot() {
                        {UNIVERSE.map(symbol => {
                            const price = marketPrices[symbol];
                            const isSelected = selectedSymbol === symbol;
+                           const state = strategyState.symbols[symbol];
+                           const trend = state?.trend_bias;
+                           
                            return (
                                <button 
                                   key={symbol}
@@ -815,7 +818,11 @@ export default function NhestTradingBot() {
                                   className={`p-4 rounded-xl border flex flex-col items-start transition-all duration-200 group relative overflow-hidden ${
                                       isSelected 
                                       ? 'bg-emerald-900/20 border-emerald-500 shadow-lg shadow-emerald-900/10' 
-                                      : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
+                                      : trend === 'LONG' 
+                                        ? 'bg-emerald-900/10 border-emerald-900/40 hover:bg-emerald-900/20'
+                                        : trend === 'SHORT'
+                                          ? 'bg-rose-900/10 border-rose-900/40 hover:bg-rose-900/20'
+                                          : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
                                   }`}
                                >
                                   <span className={`text-xs font-bold mb-1 ${isSelected ? 'text-emerald-400' : 'text-slate-400 group-hover:text-white'}`}>
@@ -1408,15 +1415,15 @@ export default function NhestTradingBot() {
                       <div className="bg-slate-900 p-3 rounded border border-slate-800">
                           <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">CVD (Whale Flow)</div>
                           <div className={`text-lg font-mono font-bold ${
-                              (currentSymbolState.oscillators?.CVD || 0) > 0 ? 'text-emerald-400' : 'text-rose-400'
+                              ((currentSymbolState.oscillators?.CVD || currentSymbolState.oscillators?.cvd || 0) > 0) ? 'text-emerald-400' : 'text-rose-400'
                           }`}>
-                              {(currentSymbolState.oscillators?.CVD || 0).toFixed(2)}
+                              {(currentSymbolState.oscillators?.CVD || currentSymbolState.oscillators?.cvd || 0).toFixed(2)}
                           </div>
                       </div>
                       <div className="bg-slate-900 p-3 rounded border border-slate-800">
                           <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">%B (Adaptive)</div>
                           <div className="text-lg font-mono font-bold text-blue-400">
-                              {(currentSymbolState.oscillators?.PctB || 0).toFixed(2)}
+                              {(currentSymbolState.oscillators?.PctB || currentSymbolState.oscillators?.pct_b || currentSymbolState.oscillators?.percent_b || 0).toFixed(2)}
                           </div>
                       </div>
                   </div>

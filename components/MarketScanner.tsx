@@ -47,7 +47,12 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                         onClick={() => onSelect(symbol)}
                         className={`text-left transition-all duration-300 group ${isSelected ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-[#020617]' : ''}`}
                     >
-                        <Card className={`p-3 !bg-slate-900/40 hover:!bg-slate-800/60 ${isSelected ? '!border-emerald-500/50' : ''} ${pulse ? (symbolPnL >= 0 ? 'ring-1 ring-emerald-500/50' : 'ring-1 ring-rose-500/50') : ''}`}>
+                        <Card className={`p-3 transition-colors ${
+                            isSelected ? '!border-emerald-500/50 !bg-slate-800' :
+                            state?.trend_bias === 'LONG' ? '!bg-emerald-900/10 !border-emerald-900/40 hover:!bg-emerald-900/20' :
+                            state?.trend_bias === 'SHORT' ? '!bg-rose-900/10 !border-rose-900/40 hover:!bg-rose-900/20' :
+                            '!bg-slate-900/40 hover:!bg-slate-800/60'
+                        } ${pulse ? (symbolPnL >= 0 ? 'ring-1 ring-emerald-500/50' : 'ring-1 ring-rose-500/50') : ''}`}>
                             <div className="flex justify-between items-start mb-2">
                                 <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase">{symbol}</span>
                                 {state?.trend_bias === 'LONG' ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : 
