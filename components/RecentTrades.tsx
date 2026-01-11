@@ -44,7 +44,7 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                     Clear History
                 </button>
             )}
-            <Badge type="primary">LIVE SESSION</Badge>
+            <Badge type="info">LIVE SESSION</Badge>
         </div>
       </div>
 

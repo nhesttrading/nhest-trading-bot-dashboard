@@ -239,6 +239,7 @@ export default function NhestTradingBot() {
 
     const socket: Socket = io(API_URL, {
         extraHeaders: { "ngrok-skip-browser-warning": "true" },
+        transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
