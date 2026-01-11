@@ -238,7 +238,12 @@ export default function NhestTradingBot() {
     if (!isAuthenticated) return;
 
     const socket: Socket = io(API_URL, {
-        extraHeaders: { "ngrok-skip-browser-warning": "true" }
+        extraHeaders: { "ngrok-skip-browser-warning": "true" },
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
     });
     socketRef.current = socket;
 
