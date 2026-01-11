@@ -39,7 +39,7 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 // CONNECTIVITY CONFIGURATION
 // Production: Set VITE_API_URL in Vercel to your Paid Ngrok Static Domain.
 // Development: Fallback to localhost.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'; 
 
 export default function NhestTradingBot() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -239,7 +239,6 @@ export default function NhestTradingBot() {
 
     const socket: Socket = io(API_URL, {
         extraHeaders: { "ngrok-skip-browser-warning": "true" },
-        transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
@@ -269,6 +268,11 @@ export default function NhestTradingBot() {
       setBridgeConnected(false);
       addLog('error', 'NET', 'Connection Lost');
       if ((socket as any)._pingInterval) clearInterval((socket as any)._pingInterval);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('Socket Connection Error:', err);
+      addLog('error', 'NET', `Connect Error: ${err.message}`);
     });
 
     socket.on('market_data', (data: MarketPrices) => {
