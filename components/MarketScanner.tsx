@@ -2,7 +2,7 @@ import React from 'react';
 import { UNIVERSE } from '../constants';
 import { MarketPrices, StrategyState } from '../types';
 import { Card } from './Card';
-import { TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Activity, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface MarketScannerProps {
     prices: MarketPrices;
@@ -71,12 +71,15 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                                  <Minus className="w-3 h-3 text-slate-700" />}
                             </div>
                             
-                            <div className={`text-sm font-mono font-bold mb-1 transition-colors duration-300 ${
+                            <div className={`text-sm font-mono font-bold mb-1 transition-colors duration-300 flex items-center gap-1 ${
                                 direction === 'up' ? 'text-emerald-400' : 
                                 direction === 'down' ? 'text-rose-400' : 
                                 'text-white'
                             }`}>
                                 {price ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '---'}
+                                
+                                {direction === 'up' && <ChevronUp className="w-3 h-3 text-emerald-500" strokeWidth={3} />}
+                                {direction === 'down' && <ChevronDown className="w-3 h-3 text-rose-500" strokeWidth={3} />}
                             </div>
 
                             <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-800/50">

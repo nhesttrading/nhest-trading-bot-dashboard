@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TrendBias, SymbolState } from '../types';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 interface LiveChartProps {
     isActive: boolean;
@@ -13,6 +14,18 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
+  // Price Fluctuation Tracking
+  const [priceDir, setPriceDir] = useState<'UP' | 'DOWN' | null>(null);
+  const lastTickRef = useRef<number | undefined>(currentPrice);
+
+  useEffect(() => {
+      if (currentPrice !== undefined && lastTickRef.current !== undefined) {
+          if (currentPrice > lastTickRef.current) setPriceDir('UP');
+          else if (currentPrice < lastTickRef.current) setPriceDir('DOWN');
+      }
+      lastTickRef.current = currentPrice;
+  }, [currentPrice]);
+
   // History tracks: { price, hmas, sr, time }
   const historyRef = useRef<{price: number, hmas: Record<string, number>, time: number}[]>([]);
 
@@ -231,6 +244,11 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
                 <span className={`text-3xl font-mono font-bold tracking-tight ${trendBias === 'SHORT' ? 'text-rose-500' : trendBias === 'LONG' ? 'text-emerald-500' : 'text-slate-200'}`}>
                 {currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </span>
+                
+                {/* Tick Fluctuation Arrow */}
+                {priceDir === 'UP' && <ChevronUp className="w-5 h-5 text-emerald-500 animate-in fade-in slide-in-from-bottom-1" strokeWidth={3} />}
+                {priceDir === 'DOWN' && <ChevronDown className="w-5 h-5 text-rose-500 animate-in fade-in slide-in-from-top-1" strokeWidth={3} />}
+
                 <span className="text-xs text-slate-500">USD</span>
             </div>
         )}

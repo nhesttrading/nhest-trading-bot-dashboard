@@ -26,6 +26,8 @@ import { LifecycleMonitor } from './components/LifecycleMonitor';
 import { Tape } from './components/Tape';
 import { ConfluenceMatrix } from './components/ConfluenceMatrix';
 import { MarketScanner } from './components/MarketScanner';
+import { SessionClock } from './components/SessionClock';
+import { MosaicGrid } from './components/MosaicGrid';
 
 const DEFAULT_SYMBOL_STATE: SymbolState = {
   trend_bias: 'NONE',
@@ -60,6 +62,37 @@ export default function NhestTradingBot() {
     setActiveView(view);
     localStorage.setItem('nhest_view', view);
   };
+
+  const [isMosaicMode, setIsMosaicMode] = useState(false);
+
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          // Ignore if input focused
+          if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+          if (e.shiftKey && e.code === 'KeyB') {
+              e.preventDefault();
+              if (activeView !== 'manual') setActiveView('manual');
+              addLog('info', 'HOTKEY', 'Quick Buy Shortcut Triggered');
+          }
+          if (e.shiftKey && e.code === 'KeyS') {
+              e.preventDefault();
+              if (activeView !== 'manual') setActiveView('manual');
+              addLog('info', 'HOTKEY', 'Quick Sell Shortcut Triggered');
+          }
+          if (e.code === 'Space') {
+              e.preventDefault();
+              handleToggleEngine();
+          }
+          if (e.code === 'Escape') {
+              if (isRuleModalOpen) setIsRuleModalOpen(false);
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeView, isRuleModalOpen, botActive]);
   
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -338,11 +371,10 @@ export default function NhestTradingBot() {
             path: '/socket.io/',
             extraHeaders: { "ngrok-skip-browser-warning": "true" },
             query: { "ngrok-skip-browser-warning": "true" }, 
-            transports: ['polling'], // START WITH POLLING to establish security handshake
-            upgrade: true, // Allow upgrade to WebSocket once handshake is cleared
+            transports: ['websocket'], // FORCE WEBSOCKET ONLY to avoid Ngrok polling errors
             reconnection: true,
             reconnectionDelay: 3000,
-            timeout: 60000,
+            timeout: 20000,
             forceNew: true,
             withCredentials: false
         });
@@ -899,36 +931,58 @@ export default function NhestTradingBot() {
             </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 min-h-[400px]">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white flex items-center gap-2"><Monitor className="w-4 h-4 text-slate-400" /> Active Market</h3>
-                    <select 
-                        value={selectedSymbol} 
-                        onChange={(e) => handleSymbolChange(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-white focus:outline-none focus:border-emerald-500"
-                    >
-                        {UNIVERSE.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <LiveChart symbol={selectedSymbol} isActive={botActive} trendBias={currentSymbolState.trend_bias} currentPrice={marketPrices[selectedSymbol]} symbolState={currentSymbolState} />
-                <div className="mt-4 pt-4 border-t border-slate-800">
-                    <div className="mb-2 text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                        <Workflow className="w-3 h-3" />
-                        Strategy Lifecycle
-                    </div>
-                    <LifecycleMonitor 
-                        status={
-                            activePositions.filter(p => p.symbol === selectedSymbol).length > 1 ? 'SCALING' :
-                            activePositions.filter(p => p.symbol === selectedSymbol).length > 0 ? 'LOCKED' :
-                            (currentSymbolState.status === 'LOCKED' || currentSymbolState.status === 'INVALIDATED' ? currentSymbolState.status : 'SCANNING')
-                        } 
-                        trendBias={currentSymbolState.trend_bias} 
-                        entryCount={activePositions.filter(p => p.symbol === selectedSymbol).length} 
-                    />
-                </div>
-            </Card>
-            <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2 min-h-[400px]">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <Monitor className="w-4 h-4 text-slate-400" /> 
+                                {isMosaicMode ? 'Institutional Mosaic' : 'Active Market'}
+                            </h3>
+                            <div className="flex gap-2">
+                                 <button 
+                                    onClick={() => setIsMosaicMode(!isMosaicMode)}
+                                    className={`px-3 py-1 text-[10px] font-bold rounded border transition-all ${isMosaicMode ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'}`}
+                                 >
+                                    {isMosaicMode ? 'SINGLE VIEW' : 'MOSAIC (4)'}
+                                 </button>
+                                 {!isMosaicMode && (
+                                    <select 
+                                        value={selectedSymbol} 
+                                        onChange={(e) => handleSymbolChange(e.target.value)}
+                                        className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-white focus:outline-none focus:border-emerald-500"
+                                    >
+                                        {UNIVERSE.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                 )}
+                            </div>
+                        </div>
+        
+                        {isMosaicMode ? (
+                            <MosaicGrid prices={marketPrices} strategyState={strategyState} botActive={botActive} />
+                        ) : (
+                            <>
+                                <LiveChart symbol={selectedSymbol} isActive={botActive} trendBias={currentSymbolState.trend_bias} currentPrice={marketPrices[selectedSymbol]} symbolState={currentSymbolState} />
+                                <div className="mt-4 pt-4 border-t border-slate-800">
+                                    <div className="mb-2 text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                        <Workflow className="w-3 h-3" />
+                                        Strategy Lifecycle
+                                    </div>
+                                    <LifecycleMonitor 
+                                        status={
+                                            activePositions.filter(p => p.symbol === selectedSymbol).length > 1 ? 'SCALING' :
+                                            activePositions.filter(p => p.symbol === selectedSymbol).length > 0 ? 'LOCKED' :
+                                            (currentSymbolState.status === 'LOCKED' || currentSymbolState.status === 'INVALIDATED' ? currentSymbolState.status : 'SCANNING')
+                                        } 
+                                        trendBias={currentSymbolState.trend_bias} 
+                                        entryCount={activePositions.filter(p => p.symbol === selectedSymbol).length} 
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </Card>
+                    <div className="space-y-6">                 {/* Session Map Widget */}
+                 {/* <SessionClock /> */}
+                 
                  <Card>
                     <h3 className="font-bold text-white text-sm mb-4">Quick Actions</h3>
                     <div className="space-y-3">
@@ -1907,9 +1961,11 @@ export default function NhestTradingBot() {
                       <Zap className="w-4 h-4" /> GENERATE INSIGHTS
                   </button>
               </Card>
-              <div className="space-y-6">
-                   <Card>
-                       <h3 className="font-bold text-white mb-2">Trade Confidence Score</h3>
+                          <div className="space-y-6">
+                               {/* Session Map Widget */}
+                               <SessionClock />
+                               
+                               <Card>                       <h3 className="font-bold text-white mb-2">Trade Confidence Score</h3>
                        {aiScore > 0 ? (
                            <>
                             <div className="flex items-end gap-2 mb-2">
