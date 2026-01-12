@@ -79,32 +79,50 @@ export default function NhestTradingBot() {
   });
 
   // --- CLOUD SYNC ---
-  // Load history, logs, and webhooks from Backend on startup
+  const syncLockRef = useRef(false);
+  
   useEffect(() => {
       const fetchData = async () => {
+          if (syncLockRef.current) return;
+          syncLockRef.current = true;
+          
           try {
-              const hRes = await fetch(`${API_URL}/api/history`, { headers: { "ngrok-skip-browser-warning": "true" } });
+              addLog('info', 'SYS', 'Attempting Cloud Sync...');
+              const hRes = await fetch(`${API_URL}/api/history`, { 
+                  headers: { "ngrok-skip-browser-warning": "69420" },
+                  mode: 'cors'
+              });
+              
               if (hRes.ok) {
                   const data = await hRes.json();
                   if (Array.isArray(data)) {
                       setClosedTrades(data);
                       localStorage.setItem('nhest_history', JSON.stringify(data));
+                      addLog('success', 'SYS', 'History Synced');
                   }
+              } else {
+                  throw new Error(`HTTP ${hRes.status}`);
               }
-              const lRes = await fetch(`${API_URL}/api/logs`, { headers: { "ngrok-skip-browser-warning": "true" } });
+              
+              const lRes = await fetch(`${API_URL}/api/logs`, { 
+                  headers: { "ngrok-skip-browser-warning": "69420" },
+                  mode: 'cors'
+              });
+              
               if (lRes.ok) {
                   const data = await lRes.json();
                   if (Array.isArray(data)) {
                       setLogs(data);
                       localStorage.setItem('nhest_logs', JSON.stringify(data));
+                      addLog('success', 'SYS', 'Telemetry Synced');
                   }
               }
-              const wRes = await fetch(`${API_URL}/api/webhooks`, { headers: { "ngrok-skip-browser-warning": "true" } });
-              if (wRes.ok) {
-                  const data = await wRes.json();
-                  if (Array.isArray(data)) setWebhookLogs(data);
-              }
-          } catch (e) { console.warn("Cloud Sync Failed (Load)"); }
+          } catch (e: any) { 
+              console.warn("Cloud Sync Failed:", e); 
+              addLog('warning', 'SYS', `Bridge Unreachable: ${e.message === 'Failed to fetch' ? 'CORS or Network Block' : e.message}`);
+          } finally {
+              syncLockRef.current = false;
+          }
       };
       if (isAuthenticated) fetchData();
   }, [isAuthenticated]);
@@ -305,91 +323,147 @@ export default function NhestTradingBot() {
   };
 
   // --- SOCKET CONNECTION ---
+  const [reconnectCounter, setReconnectCounter] = useState(0);
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const socket: Socket = io(API_URL, {
-        extraHeaders: { "ngrok-skip-browser-warning": "true" },
-        transports: ['websocket'], 
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 2000,
-        reconnectionDelayMax: 10000,
-        timeout: 60000 // Increase to 60s
-    });
-    socketRef.current = socket;
+    const initSocket = setTimeout(() => {
+        const timestamp = Date.now();
+        addLog('info', 'SYS', `Initializing Socket (STABLE STREAM): ${API_URL}`);
+        
+        if (socketRef.current) {
+            socketRef.current.removeAllListeners();
+            socketRef.current.disconnect();
+        }
 
-    socket.on('connect', () => {
-      setBridgeConnected(true);
-      playSound('info');
-      addLog('success', 'NET', 'Connected to Logic Engine');
-      
-      // Heartbeat for Latency
-      const pingInterval = setInterval(() => {
-          const start = Date.now();
-          // We use emit with acknowledgement for RTT measurement
-          socket.emit('ping_engine', {}, () => {
-              setLatency(Date.now() - start);
-          });
-      }, 5000);
-      
-      (socket as any)._pingInterval = pingInterval;
-    });
-
-    socket.on('disconnect', () => {
-      setBridgeConnected(false);
-      addLog('error', 'NET', 'Connection Lost');
-      if ((socket as any)._pingInterval) clearInterval((socket as any)._pingInterval);
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('Socket Connection Error:', err);
-      addLog('error', 'NET', `Connect Error: ${err.message}`);
-    });
-
-    socket.on('market_data', (data: MarketPrices) => {
-        if (Object.keys(data).length > 0) setMarketPrices(data);
-    });
-
-    socket.on('account_update', (data: AccountState) => {
-        setAccountState(data);
-        setSessionEquity(prev => {
-            const updated = [...prev, data.equity];
-            return updated.slice(-50); // Keep last 50 points
+        const socket: Socket = io(API_URL, {
+            path: '/socket.io/',
+            extraHeaders: { "ngrok-skip-browser-warning": "69420" },
+            transports: ['websocket', 'polling'], // Polling fallback is safer for Ngrok stability
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 3000, // Even slower to prevent aggressive flapping
+            timeout: 45000, // Higher timeout for slow proxies
+            forceNew: false,
         });
-    });
+        socketRef.current = socket;
 
-    socket.on('webhook_event', (data: WebhookEvent) => {
-        setWebhookLogs(prev => [data, ...prev].slice(0, 200));
-        addLog('info', 'WEBHOOK', `Signal Received: ${data.symbol} ${data.action}`);
-    });
+        // Data Flow Monitor
+        let dataTimeout: NodeJS.Timeout;
+        const resetDataTimeout = () => {
+            clearTimeout(dataTimeout);
+            dataTimeout = setTimeout(() => {
+                if (socket.connected) {
+                    addLog('warning', 'NET', 'Bridge open, but no market/strategy data burst received. Check engine broadcast loop.');
+                }
+            }, 60000); 
+        };
 
-    socket.on('strategy_state', (data: { symbols: Record<string, SymbolState>, active: boolean, activeStrategy?: string }) => {
-        console.log('Received Strategy State:', data); // DEBUG: Inspect incoming data
-        setStrategyState({ symbols: data.symbols });
-        setBotActive(data.active);
-        if (data.activeStrategy) setActiveStrategyName(data.activeStrategy);
-    });
-
-    socket.on('engine_status', (data: { active: boolean }) => setBotActive(data.active));
-    
-    socket.on('risk_update', (data: any) => {
-        if (data.riskPerStack) setRiskPerStack(data.riskPerStack);
-        if (data.dailyMaxLoss) setDailyMaxLoss(data.dailyMaxLoss);
-        if (data.maxDrawdown) setMaxDrawdown(data.maxDrawdown);
-        if (data.autoPause !== undefined) setAutoPause(data.autoPause);
-    });
-
-    socket.on('new_log', (log: LogEntry) => {
-        setLogs(prev => {
-            const updated = [log, ...prev].slice(0, 2000);
-            localStorage.setItem('nhest_logs', JSON.stringify(updated));
-            return updated;
+        // Unified Packet Inspector with Content Sniffer
+        let eventCount = 0;
+        socket.onAny((eventName, data) => {
+            resetDataTimeout();
+            if (eventCount < 10) {
+                const preview = JSON.stringify(data).substring(0, 50);
+                addLog('info', 'DEBUG', `Packet: ${eventName} | Data: ${preview}...`);
+                eventCount++;
+            }
         });
-    });
 
-    return () => { socket.disconnect(); };
-  }, [isAuthenticated]);
+        socket.on('connect', () => {
+          setBridgeConnected(true);
+          playSound('info');
+          addLog('success', 'NET', 'Bridge Stabilized (Live)');
+          resetDataTimeout();
+          
+          socket.emit('request_full_state');
+          socket.emit('subscribe_all');
+        });
+
+        const handleStrategyUpdate = (data: any) => {
+            resetDataTimeout();
+            
+            // Handle Array of Symbols (Common in Python engines)
+            let symbols = data.symbols || data.data?.symbols || data;
+            if (Array.isArray(symbols)) {
+                const symbolObj: Record<string, SymbolState> = {};
+                symbols.forEach((s: any) => {
+                    if (s.symbol) symbolObj[s.symbol] = s;
+                });
+                symbols = symbolObj;
+            }
+
+            if (symbols && typeof symbols === 'object' && !Array.isArray(symbols)) {
+                setStrategyState(prev => ({
+                    ...prev,
+                    symbols: { ...prev.symbols, ...symbols }
+                }));
+            }
+            
+            if (data.active !== undefined) setBotActive(data.active);
+            if (data.activeStrategy) setActiveStrategyName(data.activeStrategy);
+        };
+
+        const handleMarketUpdate = (data: any) => {
+            resetDataTimeout();
+            const prices = data.prices || data.data || data;
+            if (prices && typeof prices === 'object' && Object.keys(prices).length > 0) {
+                setMarketPrices(prev => ({ ...prev, ...prices }));
+            }
+        };
+
+        socket.on('strategy_state', (data: any) => {
+            handleStrategyUpdate(data);
+            addLog('info', 'SYS', 'Received Strategy Sync');
+        });
+        socket.on('strategy_update', handleStrategyUpdate);
+        socket.on('heartbeat', (data: any) => {
+            handleStrategyUpdate(data);
+            // If data is just a list of symbols, it might be the heartbeat
+            if (Array.isArray(data)) {
+                 addLog('info', 'SYS', `Heartbeat: ${data.length} symbols`);
+            }
+        });
+        
+        socket.on('market_data', handleMarketUpdate);
+        socket.on('market_update', handleMarketUpdate);
+
+        socket.on('account_update', (data: any) => {
+            resetDataTimeout();
+            if (data.status === 'ONLINE' || data.status === 'CONNECTED') {
+                if (!bridgeConnected) setBridgeConnected(true);
+            }
+            
+            setAccountState(data);
+            if (data.equity && data.balance) {
+                // FALLBACK: If totalUnrealizedPnL isn't calculated yet
+                const openPnL = data.equity - data.balance;
+            }
+
+            setSessionEquity(prev => {
+                const equity = data.equity || data.balance || 0;
+                const updated = [...prev, equity];
+                return updated.slice(-50);
+            });
+        });
+
+        socket.on('disconnect', (reason) => {
+          // Debounce disconnect to survive tiny Ngrok flaps
+          setTimeout(() => {
+              if (!socket.connected) {
+                  setBridgeConnected(false);
+                  addLog('error', 'NET', `Disconnected: ${reason}`);
+              }
+          }, 3000);
+        });
+    }, 1000); // 1 second delay
+
+    return () => { 
+        clearTimeout(initSocket);
+        if (socketRef.current) socketRef.current.disconnect(); 
+    };
+  }, [isAuthenticated, reconnectCounter]);
 
   // --- CALCULATIONS ---
   const activePositions: ActivePosition[] = [];
@@ -785,6 +859,17 @@ export default function NhestTradingBot() {
                         <div className={`w-2 h-2 rounded-full ${bridgeConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500'}`}></div>
                         <span className="text-[10px] font-black uppercase text-slate-400">{bridgeConnected ? 'Engine' : 'Offline'}</span>
                     </div>
+                    {!bridgeConnected && (
+                        <button 
+                            onClick={() => {
+                                addLog('warning', 'SYS', 'Forcing Bridge Reset...');
+                                setReconnectCounter(prev => prev + 1);
+                            }}
+                            className="text-[9px] font-bold text-blue-400 hover:text-blue-300 underline uppercase"
+                        >
+                            Hard Reconnect
+                        </button>
+                    )}
                     {bridgeConnected && (
                         <div className="text-[10px] font-mono font-bold text-slate-500">
                             {latency}ms
@@ -2284,7 +2369,15 @@ export default function NhestTradingBot() {
                  <div className="flex flex-col md:flex-row md:items-center md:gap-2">
                     <span className="capitalize font-bold text-white md:font-normal md:text-slate-400">{activeView.replace('-', ' ')}</span>
                     <div className="flex items-center gap-2 mt-1 md:mt-0">
-                        {bridgeConnected ? <Badge type="success">ONLINE</Badge> : <Badge type="danger">OFFLINE</Badge>}
+                        {bridgeConnected ? (
+                            Object.keys(marketPrices).length > 0 ? (
+                                <Badge type="success">LIVE STREAMING</Badge>
+                            ) : (
+                                <Badge type="warning">SYNCING ENGINE...</Badge>
+                            )
+                        ) : (
+                            <Badge type="danger">OFFLINE</Badge>
+                        )}
                     </div>
                  </div>
              </div>

@@ -12,9 +12,12 @@ interface MarketScannerProps {
 }
 
 export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategyState, onSelect, selectedSymbol }) => {
+    // Merge UNIVERSE with any dynamic symbols from strategyState
+    const allSymbols = Array.from(new Set([...UNIVERSE, ...Object.keys(strategyState.symbols)]));
+
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3 mb-6">
-            {UNIVERSE.map(symbol => {
+            {allSymbols.map(symbol => {
                 const price = prices[symbol];
                 const state = strategyState.symbols[symbol];
                 const isSelected = selectedSymbol === symbol;
