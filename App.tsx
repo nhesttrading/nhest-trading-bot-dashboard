@@ -64,35 +64,6 @@ export default function NhestTradingBot() {
   };
 
   const [isMosaicMode, setIsMosaicMode] = useState(false);
-
-  // --- KEYBOARD SHORTCUTS ---
-  useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-          // Ignore if input focused
-          if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
-
-          if (e.shiftKey && e.code === 'KeyB') {
-              e.preventDefault();
-              if (activeView !== 'manual') setActiveView('manual');
-              addLog('info', 'HOTKEY', 'Quick Buy Shortcut Triggered');
-          }
-          if (e.shiftKey && e.code === 'KeyS') {
-              e.preventDefault();
-              if (activeView !== 'manual') setActiveView('manual');
-              addLog('info', 'HOTKEY', 'Quick Sell Shortcut Triggered');
-          }
-          if (e.code === 'Space') {
-              e.preventDefault();
-              handleToggleEngine();
-          }
-          if (e.code === 'Escape') {
-              if (isRuleModalOpen) setIsRuleModalOpen(false);
-          }
-      };
-
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeView, isRuleModalOpen, botActive]);
   
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -650,6 +621,34 @@ export default function NhestTradingBot() {
           socket.emit('stop_engine');
       }
   };
+
+  // --- KEYBOARD SHORTCUTS (Moved here for scope access) ---
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+          if (e.shiftKey && e.code === 'KeyB') {
+              e.preventDefault();
+              if (activeView !== 'manual') setActiveView('manual');
+              addLog('info', 'HOTKEY', 'Quick Buy Shortcut Triggered');
+          }
+          if (e.shiftKey && e.code === 'KeyS') {
+              e.preventDefault();
+              if (activeView !== 'manual') setActiveView('manual');
+              addLog('info', 'HOTKEY', 'Quick Sell Shortcut Triggered');
+          }
+          if (e.code === 'Space') {
+              e.preventDefault();
+              handleToggleEngine();
+          }
+          if (e.code === 'Escape') {
+              if (isRuleModalOpen) setIsRuleModalOpen(false);
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeView, isRuleModalOpen, botActive]); // Removed handleToggleEngine from dep array to avoid complexity, logically stable.
 
   const handleClosePositions = async () => {
       addLog('warning', 'MANUAL', 'INITIATING PANIC CLOSE (ALL POSITIONS)...');
