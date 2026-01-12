@@ -54,7 +54,7 @@ export default function NhestTradingBot() {
   const [botActive, setBotActive] = useState(false);
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [latency, setLatency] = useState(0);
-  const [activeStrategyName, setActiveStrategyName] = useState("HMA Trend Follower");
+  const [activeStrategyName, setActiveStrategyName] = useState("Initialising...");
   const [marketPrices, setMarketPrices] = useState<MarketPrices>({});
   // Load logs from storage
   const [logs, setLogs] = useState<LogEntry[]>(() => {
