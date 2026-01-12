@@ -1,6 +1,6 @@
 export const UNIVERSE = [
   "BTCUSD", "ETHUSD", "NAS100", "SP500", "TSLA", 
-  "USOIL", "XAGUSD", "XPTUSD", "XAUUSD", "XAUUSD+", "XAGUSD+"
+  "USOIL", "XAGUSD", "XPTUSD", "XAUUSD"
 ];
 
 export const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "Nhesttradingbot2025!";

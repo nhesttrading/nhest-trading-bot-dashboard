@@ -340,33 +340,24 @@ export default function NhestTradingBot() {
         const socket: Socket = io(API_URL, {
             path: '/socket.io/',
             extraHeaders: { "ngrok-skip-browser-warning": "69420" },
-            transports: ['websocket', 'polling'], // Polling fallback is safer for Ngrok stability
+            transports: ['polling', 'websocket'], // Polling first is better for large packets over Ngrok
             reconnection: true,
             reconnectionAttempts: Infinity,
-            reconnectionDelay: 3000, // Even slower to prevent aggressive flapping
-            timeout: 45000, // Higher timeout for slow proxies
-            forceNew: false,
+            reconnectionDelay: 2000,
+            timeout: 30000,
+            forceNew: true,
+            withCredentials: false
         });
         socketRef.current = socket;
 
-        // Data Flow Monitor
-        let dataTimeout: NodeJS.Timeout;
-        const resetDataTimeout = () => {
-            clearTimeout(dataTimeout);
-            dataTimeout = setTimeout(() => {
-                if (socket.connected) {
-                    addLog('warning', 'NET', 'Bridge open, but no market/strategy data burst received. Check engine broadcast loop.');
-                }
-            }, 60000); 
-        };
-
-        // Unified Packet Inspector with Content Sniffer
+        // Unified Packet Inspector with Size Tracking
         let eventCount = 0;
         socket.onAny((eventName, data) => {
             resetDataTimeout();
             if (eventCount < 10) {
-                const preview = JSON.stringify(data).substring(0, 50);
-                addLog('info', 'DEBUG', `Packet: ${eventName} | Data: ${preview}...`);
+                const raw = JSON.stringify(data);
+                const size = (raw.length / 1024).toFixed(1);
+                addLog('info', 'DEBUG', `Packet: ${eventName} (${size}KB) | Data: ${raw.substring(0, 40)}...`);
                 eventCount++;
             }
         });

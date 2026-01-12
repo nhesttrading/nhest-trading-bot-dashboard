@@ -22,17 +22,25 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                 const state = strategyState.symbols[symbol];
                 const isSelected = selectedSymbol === symbol;
                 
-                // Track last price for pulse effect
+                // Track last price for pulse and color fluctuation
                 const lastPriceRef = React.useRef(price);
                 const [pulse, setPulse] = React.useState(false);
+                const [direction, setDirection] = React.useState<'up' | 'down' | null>(null);
 
                 React.useEffect(() => {
-                    if (price !== lastPriceRef.current) {
+                    if (price !== undefined && lastPriceRef.current !== undefined && price !== lastPriceRef.current) {
                         setPulse(true);
-                        const timer = setTimeout(() => setPulse(false), 500);
+                        setDirection(price > lastPriceRef.current ? 'up' : 'down');
+                        
+                        const timer = setTimeout(() => {
+                            setPulse(false);
+                            setDirection(null);
+                        }, 800);
+                        
                         lastPriceRef.current = price;
                         return () => clearTimeout(timer);
                     }
+                    if (price !== undefined) lastPriceRef.current = price;
                 }, [price]);
                 
                 // Calculate PnL if there's an active position
@@ -55,7 +63,7 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                             state?.trend_bias === 'LONG' ? '!bg-emerald-900/10 !border-emerald-900/40 hover:!bg-emerald-900/20' :
                             state?.trend_bias === 'SHORT' ? '!bg-rose-900/10 !border-rose-900/40 hover:!bg-rose-900/20' :
                             '!bg-slate-900/40 hover:!bg-slate-800/60'
-                        } ${pulse ? (symbolPnL >= 0 ? 'ring-1 ring-emerald-500/50' : 'ring-1 ring-rose-500/50') : ''}`}>
+                        } ${pulse ? (direction === 'up' ? 'ring-1 ring-emerald-500/50' : 'ring-1 ring-rose-500/50') : ''}`}>
                             <div className="flex justify-between items-start mb-2">
                                 <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase">{symbol}</span>
                                 {state?.trend_bias === 'LONG' ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : 
@@ -63,7 +71,11 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                                  <Minus className="w-3 h-3 text-slate-700" />}
                             </div>
                             
-                            <div className="text-sm font-mono font-bold text-white mb-1">
+                            <div className={`text-sm font-mono font-bold mb-1 transition-colors duration-300 ${
+                                direction === 'up' ? 'text-emerald-400' : 
+                                direction === 'down' ? 'text-rose-400' : 
+                                'text-white'
+                            }`}>
                                 {price ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '---'}
                             </div>
 
