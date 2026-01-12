@@ -37,11 +37,16 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 };
 
 // CONNECTIVITY CONFIGURATION
-const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'; 
+const DEFAULT_API_URL = 'https://nhesttradingbot.ngrok.app'; 
 
 export default function NhestTradingBot() {
   const [apiUrl, setApiUrl] = useState(() => {
-      return localStorage.getItem('nhest_api_url') || DEFAULT_API_URL;
+      const saved = localStorage.getItem('nhest_api_url');
+      if (saved && saved.includes('ngrok-free.dev')) {
+          localStorage.removeItem('nhest_api_url'); // Clear the 'wrong' URL
+          return DEFAULT_API_URL;
+      }
+      return saved || DEFAULT_API_URL;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -91,7 +96,11 @@ export default function NhestTradingBot() {
           try {
               addLog('info', 'SYS', `Syncing with: ${apiUrl}`);
               const hRes = await fetch(`${apiUrl}/api/history`, { 
-                  headers: { "ngrok-skip-browser-warning": "69420" },
+                  headers: { 
+                      "ngrok-skip-browser-warning": "69420",
+                      "Accept": "application/json",
+                      "Content-Type": "application/json"
+                  },
                   mode: 'cors'
               });
               
@@ -107,7 +116,11 @@ export default function NhestTradingBot() {
               }
               
               const lRes = await fetch(`${apiUrl}/api/logs`, { 
-                  headers: { "ngrok-skip-browser-warning": "69420" },
+                  headers: { 
+                      "ngrok-skip-browser-warning": "69420",
+                      "Accept": "application/json",
+                      "Content-Type": "application/json"
+                  },
                   mode: 'cors'
               });
               
@@ -121,7 +134,11 @@ export default function NhestTradingBot() {
               }
           } catch (e: any) { 
               console.warn("Cloud Sync Failed:", e); 
-              addLog('warning', 'SYS', `Bridge Unreachable: ${e.message === 'Failed to fetch' ? 'Network/CORS Error' : e.message}`);
+              const isCors = e.message.includes('fetch') || e.message.includes('Load failed');
+              addLog('error', 'SYS', isCors 
+                ? 'CORS ERROR: Your Python engine is blocking the dashboard. Add CORSMiddleware to main.py.' 
+                : `Bridge Error: ${e.message}`
+              );
           } finally {
               syncLockRef.current = false;
           }
@@ -374,19 +391,33 @@ export default function NhestTradingBot() {
           addLog('success', 'NET', 'Bridge Stabilized (Live)');
           resetDataTimeout();
           
+          // COMPREHENSIVE SYNC TRIGGERS
           socket.emit('request_full_state');
+          socket.emit('get_initial_state');
           socket.emit('subscribe_all');
+          socket.emit('sync');
+          
+          const pingInterval = setInterval(() => {
+              if (socket.connected) socket.emit('ping_engine', { t: Date.now() });
+          }, 5000);
+          (socket as any)._pingInterval = pingInterval;
         });
 
         const handleStrategyUpdate = (data: any) => {
             resetDataTimeout();
             
-            // Handle Array of Symbols (Common in Python engines)
+            // Handle various formats: String Array (Heartbeat) or Object Array/Map
             let symbols = data.symbols || data.data?.symbols || data;
+            
             if (Array.isArray(symbols)) {
                 const symbolObj: Record<string, SymbolState> = {};
                 symbols.forEach((s: any) => {
-                    if (s.symbol) symbolObj[s.symbol] = s;
+                    if (typeof s === 'string') {
+                        // If it's just a string (Heartbeat list), create a placeholder state
+                        symbolObj[s] = { ...DEFAULT_SYMBOL_STATE };
+                    } else if (s.symbol) {
+                        symbolObj[s.symbol] = s;
+                    }
                 });
                 symbols = symbolObj;
             }
@@ -415,16 +446,17 @@ export default function NhestTradingBot() {
             addLog('info', 'SYS', 'Received Strategy Sync');
         });
         socket.on('strategy_update', handleStrategyUpdate);
+        socket.on('state_update', handleStrategyUpdate);
         socket.on('heartbeat', (data: any) => {
             handleStrategyUpdate(data);
-            // If data is just a list of symbols, it might be the heartbeat
             if (Array.isArray(data)) {
-                 addLog('info', 'SYS', `Heartbeat: ${data.length} symbols`);
+                 addLog('info', 'SYS', `Heartbeat Sync: ${data.length} Assets`);
             }
         });
         
         socket.on('market_data', handleMarketUpdate);
         socket.on('market_update', handleMarketUpdate);
+        socket.on('price_update', handleMarketUpdate);
 
         socket.on('account_update', (data: any) => {
             resetDataTimeout();
@@ -810,11 +842,18 @@ export default function NhestTradingBot() {
   };
 
   const handleUpdateApiUrl = (newUrl: string) => {
-      const sanitized = newUrl.replace(/\/$/, ""); // Remove trailing slash
+      const sanitized = newUrl.trim().replace(/\/$/, ""); 
       setApiUrl(sanitized);
       localStorage.setItem('nhest_api_url', sanitized);
       addLog('info', 'SYS', `API URL Updated: ${sanitized}`);
-      setReconnectCounter(prev => prev + 1); // Force socket restart
+      setReconnectCounter(prev => prev + 1); 
+  };
+
+  const handleResetApiUrl = () => {
+      localStorage.removeItem('nhest_api_url');
+      setApiUrl(DEFAULT_API_URL);
+      addLog('warning', 'SYS', `API URL Reset to Default: ${DEFAULT_API_URL}`);
+      setReconnectCounter(prev => prev + 1);
   };
 
   if (!isAuthenticated) return <LockScreen onUnlock={() => {
@@ -2275,7 +2314,14 @@ export default function NhestTradingBot() {
                                 onClick={() => handleUpdateApiUrl(apiUrl)}
                                 className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-500 transition-all"
                            >
-                               RECONNECT
+                               UPDATE
+                           </button>
+                           <button 
+                                onClick={handleResetApiUrl}
+                                className="px-4 py-2 bg-slate-800 text-slate-400 text-xs font-bold rounded hover:bg-rose-500 hover:text-white transition-all"
+                                title="Reset to Environment Default"
+                           >
+                               RESET
                            </button>
                        </div>
                        <p className="text-[10px] text-slate-500 mt-2">
