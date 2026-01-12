@@ -37,11 +37,13 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 };
 
 // CONNECTIVITY CONFIGURATION
-// Production: Set VITE_API_URL in Vercel to your Paid Ngrok Static Domain.
-// Development: Fallback to localhost.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'; 
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'; 
 
 export default function NhestTradingBot() {
+  const [apiUrl, setApiUrl] = useState(() => {
+      return localStorage.getItem('nhest_api_url') || DEFAULT_API_URL;
+  });
+
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('nhest_auth') === 'true';
   });
@@ -87,8 +89,8 @@ export default function NhestTradingBot() {
           syncLockRef.current = true;
           
           try {
-              addLog('info', 'SYS', 'Attempting Cloud Sync...');
-              const hRes = await fetch(`${API_URL}/api/history`, { 
+              addLog('info', 'SYS', `Syncing with: ${apiUrl}`);
+              const hRes = await fetch(`${apiUrl}/api/history`, { 
                   headers: { "ngrok-skip-browser-warning": "69420" },
                   mode: 'cors'
               });
@@ -104,7 +106,7 @@ export default function NhestTradingBot() {
                   throw new Error(`HTTP ${hRes.status}`);
               }
               
-              const lRes = await fetch(`${API_URL}/api/logs`, { 
+              const lRes = await fetch(`${apiUrl}/api/logs`, { 
                   headers: { "ngrok-skip-browser-warning": "69420" },
                   mode: 'cors'
               });
@@ -119,13 +121,13 @@ export default function NhestTradingBot() {
               }
           } catch (e: any) { 
               console.warn("Cloud Sync Failed:", e); 
-              addLog('warning', 'SYS', `Bridge Unreachable: ${e.message === 'Failed to fetch' ? 'CORS or Network Block' : e.message}`);
+              addLog('warning', 'SYS', `Bridge Unreachable: ${e.message === 'Failed to fetch' ? 'Network/CORS Error' : e.message}`);
           } finally {
               syncLockRef.current = false;
           }
       };
       if (isAuthenticated) fetchData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, apiUrl]);
 
   // Save history to Backend on change
   const updateHistory = (newHistory: ActivePosition[]) => {
@@ -133,11 +135,11 @@ export default function NhestTradingBot() {
       localStorage.setItem('nhest_history', JSON.stringify(newHistory));
       
       // Fire and forget upload
-      fetch(`${API_URL}/api/history`, {
+      fetch(`${apiUrl}/api/history`, {
           method: 'POST',
           headers: { 
               "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true"
+              "ngrok-skip-browser-warning": "69420"
           },
           body: JSON.stringify(newHistory)
       }).catch(e => console.warn("Cloud Sync Failed (Save)"));
@@ -330,21 +332,25 @@ export default function NhestTradingBot() {
 
     const initSocket = setTimeout(() => {
         const timestamp = Date.now();
-        addLog('info', 'SYS', `Initializing Socket (STABLE STREAM): ${API_URL}`);
+        addLog('info', 'SYS', `Initializing Socket (STABLE STREAM): ${apiUrl}`);
         
         if (socketRef.current) {
             socketRef.current.removeAllListeners();
             socketRef.current.disconnect();
         }
 
-        const socket: Socket = io(API_URL, {
+        const socket: Socket = io(apiUrl, {
             path: '/socket.io/',
             extraHeaders: { "ngrok-skip-browser-warning": "69420" },
+            query: { 
+                "ngrok-skip-browser-warning": "69420",
+                "t": timestamp // Cache buster
+            },
             transports: ['polling', 'websocket'], // Polling first is better for large packets over Ngrok
             reconnection: true,
             reconnectionAttempts: Infinity,
-            reconnectionDelay: 2000,
-            timeout: 30000,
+            reconnectionDelay: 3000, // Even slower to prevent aggressive flapping
+            timeout: 45000, // Higher timeout for slow proxies
             forceNew: true,
             withCredentials: false
         });
@@ -633,7 +639,7 @@ export default function NhestTradingBot() {
 
       // STRATEGY 3: HTTP Global Endpoint (Backup)
       try {
-        await fetch(`${API_URL}/api/kill`, { method: 'POST', headers: { "ngrok-skip-browser-warning": "true" } });
+        await fetch(`${apiUrl}/api/kill`, { method: 'POST', headers: { "ngrok-skip-browser-warning": "69420" } });
       } catch (e) { console.error(e); }
   };
 
@@ -646,11 +652,11 @@ export default function NhestTradingBot() {
     
     // HTTP API is primary for close/kill to ensure ACID execution on broker
     try {
-        const res = await fetch(`${API_URL}/api/close`, { 
+        const res = await fetch(`${apiUrl}/api/close`, { 
             method: 'POST', 
             headers: { 
                 "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true" 
+                "ngrok-skip-browser-warning": "69420" 
             },
             body: JSON.stringify({ 
                 symbol: ticket ? undefined : symbol, 
@@ -672,11 +678,11 @@ export default function NhestTradingBot() {
     if (!confirm(`Execute Market ${action} for ${selectedSymbol} (${manualVolume} lots)?`)) return;
     try {
         addLog('info', 'MANUAL', `Sending ${action} order for ${selectedSymbol}...`);
-        const res = await fetch(`${API_URL}/api/trade`, { 
+        const res = await fetch(`${apiUrl}/api/trade`, { 
             method: 'POST', 
             headers: { 
                 "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true" 
+                "ngrok-skip-browser-warning": "69420" 
             },
             body: JSON.stringify({ 
                 symbol: selectedSymbol, 
@@ -702,11 +708,11 @@ export default function NhestTradingBot() {
           const payload = { strategy: strat, params: params };
           addLog('info', 'CONFIG', `Uploading Strategy: ${strat}...`);
           
-          const res = await fetch(`${API_URL}/api/strategy`, { 
+          const res = await fetch(`${apiUrl}/api/strategy`, { 
               method: 'POST', 
               headers: { 
                   "Content-Type": "application/json",
-                  "ngrok-skip-browser-warning": "true" 
+                  "ngrok-skip-browser-warning": "69420" 
               },
               body: JSON.stringify(payload)
           });
@@ -801,6 +807,14 @@ export default function NhestTradingBot() {
       
       socketRef.current.emit('update_risk', config);
       addLog('success', 'RISK', 'Risk configuration sent to engine');
+  };
+
+  const handleUpdateApiUrl = (newUrl: string) => {
+      const sanitized = newUrl.replace(/\/$/, ""); // Remove trailing slash
+      setApiUrl(sanitized);
+      localStorage.setItem('nhest_api_url', sanitized);
+      addLog('info', 'SYS', `API URL Updated: ${sanitized}`);
+      setReconnectCounter(prev => prev + 1); // Force socket restart
   };
 
   if (!isAuthenticated) return <LockScreen onUnlock={() => {
@@ -2241,6 +2255,36 @@ export default function NhestTradingBot() {
       <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in">
            <h2 className="text-2xl font-bold text-white">Settings & Security</h2>
            
+           <Card className="border-l-4 border-l-emerald-500">
+               <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                   <Server className="w-5 h-5 text-emerald-400" /> 
+                   Connection Gateway
+               </h3>
+               <div className="space-y-4">
+                   <div>
+                       <label className="text-xs text-slate-400 mb-1 block">Active Bridge URL (Ngrok/Local)</label>
+                       <div className="flex gap-2">
+                           <input 
+                                type="text" 
+                                value={apiUrl} 
+                                onChange={(e) => handleUpdateApiUrl(e.target.value)}
+                                className="flex-1 bg-slate-900 border border-slate-700 text-white text-sm rounded p-2 focus:border-emerald-500 outline-none font-mono" 
+                                placeholder="https://your-tunnel.ngrok.app"
+                           />
+                           <button 
+                                onClick={() => handleUpdateApiUrl(apiUrl)}
+                                className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-500 transition-all"
+                           >
+                               RECONNECT
+                           </button>
+                       </div>
+                       <p className="text-[10px] text-slate-500 mt-2">
+                           * Changes are saved locally. Default: {DEFAULT_API_URL}
+                       </p>
+                   </div>
+               </div>
+           </Card>
+
            <Card>
                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
                    <Share2 className="w-5 h-5 text-blue-400" /> 
@@ -2250,11 +2294,10 @@ export default function NhestTradingBot() {
                    <div className="bg-slate-950/50 p-4 rounded border border-slate-800">
                        <p className="text-xs text-slate-400 mb-2">
                            Configure your TradingView Alerts to send JSON data to the following URL. 
-                           This will trigger the bot and forward execution to your MT5 connector.
                        </p>
                        <div className="flex items-center gap-2 mb-4">
                            <div className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-300">
-                               {API_URL}/webhook
+                               {apiUrl}/webhook
                            </div>
                            <button className="p-2 bg-slate-800 border border-slate-700 rounded hover:text-white text-slate-400">
                                <Copy className="w-4 h-4" />
