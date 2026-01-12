@@ -239,11 +239,12 @@ export default function NhestTradingBot() {
 
     const socket: Socket = io(API_URL, {
         extraHeaders: { "ngrok-skip-browser-warning": "true" },
+        transports: ['websocket'], 
         reconnection: true,
         reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 10000,
+        timeout: 60000 // Increase to 60s
     });
     socketRef.current = socket;
 
