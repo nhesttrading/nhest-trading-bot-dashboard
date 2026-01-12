@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist', // Output build to a dist folder
       emptyOutDir: true,
+      chunkSizeWarningLimit: 1000,
     }
   };
 });
