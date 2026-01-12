@@ -94,35 +94,33 @@ export default function NhestTradingBot() {
           syncLockRef.current = true;
           
           try {
-              // Add query param bypass to fetch calls for VPS/Ngrok stability
-              const bypassUrl = (url: string) => `${url}?ngrok-skip-browser-warning=true`;
+              // PRIME THE TUNNEL: Security bypass for Ngrok VPS
+              const bypass = '?ngrok-skip-browser-warning=true';
+              await fetch(`${apiUrl}/socket.io/${bypass}`, { mode: 'no-cors' });
               
-              addLog('info', 'SYS', `Syncing with: ${apiUrl}`);
-              const hRes = await fetch(bypassUrl(`${apiUrl}/api/history`), { 
-                  mode: 'cors',
-                  credentials: 'omit'
-              });
+              addLog('info', 'SYS', `Syncing Gateway: ${apiUrl}`);
               
+              const hRes = await fetch(`${apiUrl}/api/history${bypass}`, { mode: 'cors' });
               if (hRes.ok) {
                   const data = await hRes.json();
                   if (Array.isArray(data)) {
                       setClosedTrades(data);
                       localStorage.setItem('nhest_history', JSON.stringify(data));
-                      addLog('success', 'SYS', 'History Synced');
+                      addLog('success', 'SYS', 'History Ledger Synced');
                   }
               }
               
-              const lRes = await fetch(bypassUrl(`${apiUrl}/api/logs`), { 
-                  mode: 'cors',
-                  credentials: 'omit'
-              });
-              
+              const lRes = await fetch(`${apiUrl}/api/logs${bypass}`, { mode: 'cors' });
               if (lRes.ok) {
-                  const data = await hRes.json(); // Use hRes.json() if it was already read, or lRes.json()
+                  const data = await lRes.json();
+                  if (Array.isArray(data)) {
+                      setLogs(data);
+                      localStorage.setItem('nhest_logs', JSON.stringify(data));
+                      addLog('success', 'SYS', 'Telemetry Synced');
+                  }
               }
           } catch (e: any) { 
-              console.warn("Cloud Sync Note:", e); 
-              // We won't log a critical error here as the Socket is more important
+              console.warn("Tunnel Prime Note:", e); 
           } finally {
               syncLockRef.current = false;
           }
@@ -332,22 +330,21 @@ export default function NhestTradingBot() {
     if (!isAuthenticated) return;
 
     const initSocket = setTimeout(() => {
-        const timestamp = Date.now();
-        addLog('info', 'SYS', `Initializing Socket (STABLE STREAM): ${apiUrl}`);
+        addLog('info', 'SYS', `Initializing High-Stability Bridge...`);
         
-        if (socketRef.current) {
-            socketRef.current.removeAllListeners();
-            socketRef.current.disconnect();
-        }
+        if (socketRef.current) socketRef.current.disconnect();
 
         const socket: Socket = io(apiUrl, {
+            path: '/socket.io/',
             extraHeaders: { "ngrok-skip-browser-warning": "true" },
             query: { "ngrok-skip-browser-warning": "true" }, 
-            transports: ['websocket'], // WebSocket is more stable for VPS once handshake passes
+            transports: ['polling'], // START WITH POLLING to establish security handshake
+            upgrade: true, // Allow upgrade to WebSocket once handshake is cleared
             reconnection: true,
-            reconnectionDelay: 2000,
-            timeout: 30000,
+            reconnectionDelay: 3000,
+            timeout: 60000,
             forceNew: true,
+            withCredentials: false
         });
         socketRef.current = socket;
 
@@ -355,41 +352,115 @@ export default function NhestTradingBot() {
           setBridgeConnected(true);
           playSound('info');
           const transport = socket.io.engine.transport.name;
-          addLog('success', 'NET', `Live Link Secured (${transport.toUpperCase()})`);
+          addLog('success', 'NET', `Bridge Secured (${transport.toUpperCase()})`);
           resetDataTimeout();
           
+          // COMPREHENSIVE SYNC TRIGGERS
           socket.emit('request_full_state');
+          socket.emit('get_initial_state');
           socket.emit('subscribe_all');
+          socket.emit('sync');
         });
 
         socket.on('connect_error', (err) => {
-            addLog('error', 'NET', `Socket Error: ${err.message}`);
-            // If the error is 'parse error', it might be a version mismatch or large packet
-            if (err.message.includes('parse')) {
-                addLog('warning', 'SYS', 'Detected data parsing issue. Attempting recovery...');
-            }
+            addLog('error', 'NET', `Gateway Error: ${err.message}`);
         });
 
         socket.on('disconnect', (reason) => {
-          addLog('warning', 'NET', `Bridge Interrupted: ${reason}`);
-          if (reason === 'io server disconnect') {
-              // the disconnection was initiated by the server, you need to reconnect manually
-              socket.connect();
-          }
-          // 5 second debounce to ignore quick Ngrok flaps
+          addLog('warning', 'NET', `Bridge Reset: ${reason}`);
           setTimeout(() => {
-              if (!socket.connected) {
-                  setBridgeConnected(false);
-              }
+              if (!socket.connected) setBridgeConnected(false);
           }, 5000);
         });
-    }, 1000); // 1 second delay
 
-    return () => { 
+        socket.onAny((eventName, data) => {
+            resetDataTimeout();
+            if (eventCount < 10) {
+                const preview = JSON.stringify(data).substring(0, 50);
+                addLog('info', 'DEBUG', `Packet: ${eventName} | Data: ${preview}...`);
+                eventCount++;
+            }
+        });
+
+        const handleStrategyUpdate = (data: any) => {
+            resetDataTimeout();
+            
+            let symbols = data.symbols || data.data?.symbols || data;
+            
+            if (Array.isArray(symbols)) {
+                const symbolObj: Record<string, SymbolState> = {};
+                symbols.forEach((s: any) => {
+                    if (typeof s === 'string') {
+                        symbolObj[s] = { ...DEFAULT_SYMBOL_STATE };
+                    } else if (s.symbol) {
+                        symbolObj[s.symbol] = s;
+                    }
+                });
+                symbols = symbolObj;
+            }
+
+            if (symbols && typeof symbols === 'object' && !Array.isArray(symbols)) {
+                setStrategyState(prev => ({
+                    ...prev,
+                    symbols: { ...prev.symbols, ...symbols }
+                }));
+            }
+            
+            if (data.active !== undefined) setBotActive(data.active);
+            if (data.activeStrategy) setActiveStrategyName(data.activeStrategy);
+        };
+
+        const handleMarketUpdate = (data: any) => {
+            resetDataTimeout();
+            const prices = data.prices || data.data || data;
+            if (prices && typeof prices === 'object' && Object.keys(prices).length > 0) {
+                setMarketPrices(prev => ({ ...prev, ...prices }));
+            }
+        };
+
+        socket.on('strategy_state', (data: any) => {
+            handleStrategyUpdate(data);
+            addLog('info', 'SYS', 'Received Strategy Sync');
+        });
+        socket.on('strategy_update', handleStrategyUpdate);
+        socket.on('state_update', handleStrategyUpdate);
+        socket.on('heartbeat', (data: any) => {
+            handleStrategyUpdate(data);
+            if (Array.isArray(data)) {
+                 addLog('info', 'SYS', `Heartbeat Sync: ${data.length} Assets`);
+            }
+        });
+        
+        socket.on('market_data', handleMarketUpdate);
+        socket.on('market_update', handleMarketUpdate);
+        socket.on('price_update', handleMarketUpdate);
+
+        socket.on('account_update', (data: any) => {
+            setAccountState(data);
+            if (data.status === 'ONLINE' || data.status === 'CONNECTED') {
+                if (!bridgeConnected) setBridgeConnected(true);
+            }
+        });
+    }, 1000);
+
+    return () => {
         clearTimeout(initSocket);
-        if (socketRef.current) socketRef.current.disconnect(); 
+        if (socketRef.current) socketRef.current.disconnect();
     };
-  }, [isAuthenticated, reconnectCounter]);
+  }, [isAuthenticated, reconnectCounter, apiUrl]);
+
+  // Data Flow Monitor
+  let dataTimeout: NodeJS.Timeout;
+  const resetDataTimeout = () => {
+      clearTimeout(dataTimeout);
+      dataTimeout = setTimeout(() => {
+          if (socketRef.current?.connected) {
+              addLog('warning', 'NET', 'Connection stale. Waiting for engine pulse...');
+          }
+      }, 60000); 
+  };
+
+  let eventCount = 0;
 
   // --- CALCULATIONS ---
   const activePositions: ActivePosition[] = [];
