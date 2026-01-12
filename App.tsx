@@ -45,7 +45,14 @@ export default function NhestTradingBot() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('nhest_auth') === 'true';
   });
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState(() => {
+    return localStorage.getItem('nhest_view') || 'dashboard';
+  });
+  
+  const handleViewChange = (view: string) => {
+    setActiveView(view);
+    localStorage.setItem('nhest_view', view);
+  };
   
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,12 +86,18 @@ export default function NhestTradingBot() {
               const hRes = await fetch(`${API_URL}/api/history`, { headers: { "ngrok-skip-browser-warning": "true" } });
               if (hRes.ok) {
                   const data = await hRes.json();
-                  if (Array.isArray(data)) setClosedTrades(data);
+                  if (Array.isArray(data)) {
+                      setClosedTrades(data);
+                      localStorage.setItem('nhest_history', JSON.stringify(data));
+                  }
               }
               const lRes = await fetch(`${API_URL}/api/logs`, { headers: { "ngrok-skip-browser-warning": "true" } });
               if (lRes.ok) {
                   const data = await lRes.json();
-                  if (Array.isArray(data)) setLogs(data);
+                  if (Array.isArray(data)) {
+                      setLogs(data);
+                      localStorage.setItem('nhest_logs', JSON.stringify(data));
+                  }
               }
               const wRes = await fetch(`${API_URL}/api/webhooks`, { headers: { "ngrok-skip-browser-warning": "true" } });
               if (wRes.ok) {
@@ -132,7 +145,17 @@ export default function NhestTradingBot() {
       actionValue: number;
       active: boolean;
   }
-  const [automationRules, setAutomationRules] = useState<AutoRule[]>([]);
+  const [automationRules, setAutomationRules] = useState<AutoRule[]>(() => {
+      try {
+          const saved = localStorage.getItem('nhest_rules');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+  });
+
+  useEffect(() => {
+      localStorage.setItem('nhest_rules', JSON.stringify(automationRules));
+  }, [automationRules]);
+
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [newRule, setNewRule] = useState<Omit<AutoRule, 'id' | 'active'>>({
       name: '',
@@ -145,24 +168,72 @@ export default function NhestTradingBot() {
   });
   
   // Strategy Builder State
-  const [selectedSymbol, setSelectedSymbol] = useState("BTCUSD");
-  const [strategyType, setStrategyType] = useState("HMA Trend Follower");
-  const [timeframe, setTimeframe] = useState("5M");
+  const [selectedSymbol, setSelectedSymbol] = useState(() => {
+      return localStorage.getItem('nhest_selected_symbol') || "BTCUSD";
+  });
+
+  const handleSymbolChange = (symbol: string) => {
+      setSelectedSymbol(symbol);
+      localStorage.setItem('nhest_selected_symbol', symbol);
+  };
+
+  const [strategyType, setStrategyType] = useState(() => {
+      return localStorage.getItem('nhest_strategy_type') || "HMA Trend Follower";
+  });
+
+  useEffect(() => {
+      localStorage.setItem('nhest_strategy_type', strategyType);
+  }, [strategyType]);
+
+  const [timeframe, setTimeframe] = useState(() => {
+      return localStorage.getItem('nhest_timeframe') || "5M";
+  });
+
+  useEffect(() => {
+      localStorage.setItem('nhest_timeframe', timeframe);
+  }, [timeframe]);
   
   // Manual Trading State
   const [manualVolume, setManualVolume] = useState(0.01);
   const [manualReason, setManualReason] = useState("");
 
   // Strategy Parameters (Editable)
-  const [fastPeriod, setFastPeriod] = useState(15);
-  const [slowPeriod, setSlowPeriod] = useState(30);
-  const [rsiThreshold, setRsiThreshold] = useState(50);
+  const [fastPeriod, setFastPeriod] = useState(() => {
+      return Number(localStorage.getItem('nhest_fast_period')) || 15;
+  });
+  const [slowPeriod, setSlowPeriod] = useState(() => {
+      return Number(localStorage.getItem('nhest_slow_period')) || 30;
+  });
+  const [rsiThreshold, setRsiThreshold] = useState(() => {
+      return Number(localStorage.getItem('nhest_rsi_threshold')) || 50;
+  });
+
+  useEffect(() => {
+      localStorage.setItem('nhest_fast_period', fastPeriod.toString());
+      localStorage.setItem('nhest_slow_period', slowPeriod.toString());
+      localStorage.setItem('nhest_rsi_threshold', rsiThreshold.toString());
+  }, [fastPeriod, slowPeriod, rsiThreshold]);
   
   // Risk State
-  const [riskPerStack, setRiskPerStack] = useState(2.0);
-  const [dailyMaxLoss, setDailyMaxLoss] = useState(3.0);
-  const [maxDrawdown, setMaxDrawdown] = useState(5.0);
-  const [autoPause, setAutoPause] = useState(true);
+  const [riskPerStack, setRiskPerStack] = useState(() => {
+      return Number(localStorage.getItem('nhest_risk_per_stack')) || 2.0;
+  });
+  const [dailyMaxLoss, setDailyMaxLoss] = useState(() => {
+      return Number(localStorage.getItem('nhest_daily_max_loss')) || 3.0;
+  });
+  const [maxDrawdown, setMaxDrawdown] = useState(() => {
+      return Number(localStorage.getItem('nhest_max_drawdown')) || 5.0;
+  });
+  const [autoPause, setAutoPause] = useState(() => {
+      return localStorage.getItem('nhest_auto_pause') !== 'false';
+  });
+
+  useEffect(() => {
+      localStorage.setItem('nhest_risk_per_stack', riskPerStack.toString());
+      localStorage.setItem('nhest_daily_max_loss', dailyMaxLoss.toString());
+      localStorage.setItem('nhest_max_drawdown', maxDrawdown.toString());
+      localStorage.setItem('nhest_auto_pause', autoPause.toString());
+  }, [riskPerStack, dailyMaxLoss, maxDrawdown, autoPause]);
 
   // AI State
   const [aiAnalysis, setAiAnalysis] = useState("");
@@ -451,7 +522,11 @@ export default function NhestTradingBot() {
       if (type === 'error') playSound('error');
       if (type === 'success') playSound('success');
       
-      setLogs(prev => [logEntry, ...prev].slice(0, 2000));
+      setLogs(prev => {
+          const updated = [logEntry, ...prev].slice(0, 2000);
+          localStorage.setItem('nhest_logs', JSON.stringify(updated));
+          return updated;
+      });
       if (socketRef.current?.connected) {
           socketRef.current.emit('new_log_client', logEntry);
       }
@@ -676,7 +751,7 @@ export default function NhestTradingBot() {
             prices={marketPrices} 
             strategyState={strategyState} 
             selectedSymbol={selectedSymbol}
-            onSelect={setSelectedSymbol}
+            onSelect={handleSymbolChange}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -733,7 +808,7 @@ export default function NhestTradingBot() {
                     <h3 className="font-bold text-white flex items-center gap-2"><Monitor className="w-4 h-4 text-slate-400" /> Active Market</h3>
                     <select 
                         value={selectedSymbol} 
-                        onChange={(e) => setSelectedSymbol(e.target.value)}
+                        onChange={(e) => handleSymbolChange(e.target.value)}
                         className="bg-slate-900 border border-slate-700 text-xs rounded px-2 py-1 text-white focus:outline-none focus:border-emerald-500"
                     >
                         {UNIVERSE.map(s => <option key={s} value={s}>{s}</option>)}
@@ -819,7 +894,7 @@ export default function NhestTradingBot() {
                            return (
                                <button 
                                   key={symbol}
-                                  onClick={() => setSelectedSymbol(symbol)}
+                                  onClick={() => handleSymbolChange(symbol)}
                                   className={`p-4 rounded-xl border flex flex-col items-start transition-all duration-200 group relative overflow-hidden ${
                                       isSelected 
                                       ? 'bg-emerald-900/20 border-emerald-500 shadow-lg shadow-emerald-900/10' 
@@ -1394,7 +1469,7 @@ export default function NhestTradingBot() {
                      {UNIVERSE.map(s => (
                          <button 
                             key={s} 
-                            onClick={() => setSelectedSymbol(s)} 
+                            onClick={() => handleSymbolChange(s)} 
                             className={`px-3 py-1 rounded text-xs font-bold border transition-all ${selectedSymbol === s ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`}
                          >
                              {s}
@@ -2166,7 +2241,7 @@ export default function NhestTradingBot() {
 
       {/* Desktop Sidebar */}
       <div className="hidden md:flex h-full relative z-20">
-        <Sidebar activeView={activeView} onSelect={setActiveView} onLogout={handleLogout} />
+        <Sidebar activeView={activeView} onSelect={handleViewChange} onLogout={handleLogout} />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -2179,7 +2254,7 @@ export default function NhestTradingBot() {
                 <Sidebar 
                     activeView={activeView} 
                     onSelect={(view) => {
-                        setActiveView(view);
+                        handleViewChange(view);
                         setIsMobileMenuOpen(false);
                     }} 
                     onLogout={handleLogout} 
@@ -2238,10 +2313,10 @@ export default function NhestTradingBot() {
                                      <p className="text-[10px] text-emerald-400 font-mono">ACCESS: LEVEL 1</p>
                                  </div>
                                  <div className="py-1">
-                                     <button onClick={() => { setActiveView('settings'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2">
+                                     <button onClick={() => { handleViewChange('settings'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2">
                                          <Sliders className="w-3 h-3" /> Preferences
                                      </button>
-                                     <button onClick={() => { setActiveView('logs'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2">
+                                     <button onClick={() => { handleViewChange('logs'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2">
                                          <ShieldCheck className="w-3 h-3" /> Security Log
                                      </button>
                                  </div>
