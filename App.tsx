@@ -39,16 +39,20 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 };
 
 // CONNECTIVITY CONFIGURATION
-const DEFAULT_API_URL = 'https://nhesttradingbot.ngrok.app'; 
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'https://nhesttradingbot.ngrok.app'; 
 
 export default function NhestTradingBot() {
+  // Initialize from storage, host-detection, or env
   const [apiUrl, setApiUrl] = useState(() => {
-      const saved = localStorage.getItem('nhest_api_url');
-      if (saved && saved.includes('ngrok-free.dev')) {
-          localStorage.removeItem('nhest_api_url'); // Clear the 'wrong' URL
-          return DEFAULT_API_URL;
-      }
-      return saved || DEFAULT_API_URL;
+    const saved = localStorage.getItem('nhest_api_url');
+    if (saved) return saved;
+    
+    // Auto-detect local engine if UI is local
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        return 'http://127.0.0.1:8000';
+    }
+    
+    return DEFAULT_API_URL;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -340,7 +344,6 @@ export default function NhestTradingBot() {
 
         const socket: Socket = io(apiUrl, {
             path: '/socket.io/',
-            extraHeaders: { "ngrok-skip-browser-warning": "true" },
             query: { "ngrok-skip-browser-warning": "true" }, 
             transports: ['websocket'], // FORCE WEBSOCKET ONLY to avoid Ngrok polling errors
             reconnection: true,
@@ -465,6 +468,64 @@ export default function NhestTradingBot() {
 
   let eventCount = 0;
 
+  // --- HTTP PULSE MODE (Fallback) ---
+  useEffect(() => {
+      // Run pulse if socket is NOT connected
+      if (bridgeConnected) return;
+
+      const runPulse = async () => {
+          const headers = { 
+              "ngrok-skip-browser-warning": "true",
+              "Content-Type": "application/json"
+          };
+          
+          try {
+              // 1. Market Data
+              const marketRes = await fetch(`${apiUrl}/api/market`, { headers });
+              if (marketRes.ok) {
+                  const data = await marketRes.json();
+                  if (data) setMarketPrices(prev => ({ ...prev, ...(data.prices || data) }));
+              }
+
+              // 2. Strategy State
+              const stateRes = await fetch(`${apiUrl}/api/state`, { headers });
+              if (stateRes.ok) {
+                  const data = await stateRes.json();
+                  if (data) {
+                      // Normalize symbol map
+                      let symbols = data.symbols || data.data?.symbols || data;
+                      if (Array.isArray(symbols)) {
+                          const symbolObj: Record<string, SymbolState> = {};
+                          symbols.forEach((s: any) => {
+                              if (typeof s === 'string') symbolObj[s] = { ...DEFAULT_SYMBOL_STATE };
+                              else if (s.symbol) symbolObj[s.symbol] = s;
+                          });
+                          symbols = symbolObj;
+                      }
+                      if (symbols && typeof symbols === 'object') {
+                           setStrategyState(prev => ({ ...prev, symbols: symbols }));
+                      }
+                      if (data.active !== undefined) setBotActive(data.active);
+                      if (data.activeStrategy) setActiveStrategyName(data.activeStrategy);
+                  }
+              }
+
+              // 3. Account
+              const accRes = await fetch(`${apiUrl}/api/account`, { headers });
+              if (accRes.ok) {
+                   const data = await accRes.json();
+                   setAccountState(data);
+              }
+
+          } catch (e) {
+              // Silent fail on pulse to avoid log spam
+          }
+      };
+
+      const timer = setInterval(runPulse, 1000);
+      return () => clearInterval(timer);
+  }, [bridgeConnected, apiUrl]);
+
   // --- CALCULATIONS ---
   const activePositions: ActivePosition[] = [];
   const pendingOrders: any[] = [];
@@ -503,7 +564,7 @@ export default function NhestTradingBot() {
             if (isPending) {
                 pendingOrders.push({
                       symbol: sym,
-                      bias: state.trend_bias,
+                      bias: entry.type || state.trend_bias,
                       status: state.status,
                       currentPrice: marketPrices[sym] || 0,
                       limitPrice: entry.price,
@@ -516,6 +577,9 @@ export default function NhestTradingBot() {
                 const currentP = marketPrices[sym];
                 let pnl = 0;
                 
+                // Determine direction from entry.type or fallback to state.trend_bias
+                const posType = entry.type || state.trend_bias;
+
                 // Use Backend PnL if available, otherwise calculate fallback
                 if (entry.pnl !== undefined) {
                     pnl = entry.pnl;
@@ -523,7 +587,7 @@ export default function NhestTradingBot() {
                     pnl = entry.profit;
                 } else if (currentP) {
                     let rawDiff = (currentP - entry.price) / entry.price;
-                    if (state.trend_bias === 'SHORT') rawDiff = -rawDiff;
+                    if (['SHORT', 'BEAR', 'SELL'].includes(posType)) rawDiff = -rawDiff;
                     pnl = rawDiff * 10000; 
                 }
                 
@@ -531,7 +595,7 @@ export default function NhestTradingBot() {
                 
                 activePositions.push({
                     symbol: sym,
-                    type: state.trend_bias,
+                    type: posType,
                     entryPrice: entry.price,
                     pnl: pnl,
                     layer: idx + 1,
@@ -546,8 +610,8 @@ export default function NhestTradingBot() {
       }
   });
 
-  const activeLongs = activePositions.filter(p => p.type === 'LONG').length;
-  const activeShorts = activePositions.filter(p => p.type === 'SHORT').length;
+  const activeLongs = activePositions.filter(p => ['LONG', 'BULL', 'BUY'].includes(p.type)).length;
+  const activeShorts = activePositions.filter(p => ['SHORT', 'BEAR', 'SELL'].includes(p.type)).length;
   const realOpenPnL = accountState ? accountState.equity - accountState.balance : 0;
 
   // Update History when trades close OR pending orders cancel
@@ -676,10 +740,8 @@ export default function NhestTradingBot() {
 
   const handleCloseSymbol = async (symbol: string, ticket?: number, volume?: number) => {
     if (!confirm(`Close ${symbol} position ${ticket ? `(Ticket: ${ticket})` : ''}?`)) return;
-    // DEBUG: Show exact payload to user
-    addLog('info', 'DEBUG', `Payload: ${JSON.stringify({ s: symbol, t: ticket, v: volume })}`);
-    
     addLog('info', 'MANUAL', `Sending CLOSE command for ${symbol} (Ticket: ${ticket || 'ALL'})...`);
+    addLog('info', 'DEBUG', `Payload: ${JSON.stringify({ symbol, ticket, volume })}`);
     
     // HTTP API is primary for close/kill to ensure ACID execution on broker
     try {
@@ -1048,9 +1110,9 @@ export default function NhestTradingBot() {
                                   className={`p-4 rounded-xl border flex flex-col items-start transition-all duration-200 group relative overflow-hidden ${
                                       isSelected 
                                       ? 'bg-emerald-900/20 border-emerald-500 shadow-lg shadow-emerald-900/10' 
-                                      : trend === 'LONG' 
+                                      : ['LONG', 'BULL', 'BUY'].includes(trend as string) 
                                         ? 'bg-emerald-900/10 border-emerald-900/40 hover:bg-emerald-900/20'
-                                        : trend === 'SHORT'
+                                        : ['SHORT', 'BEAR', 'SELL'].includes(trend as string)
                                           ? 'bg-rose-900/10 border-rose-900/40 hover:bg-rose-900/20'
                                           : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
                                   }`}
@@ -1532,7 +1594,11 @@ export default function NhestTradingBot() {
                               activePositions.map((pos, i) => (
                                   <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                                       <td className="px-6 py-4 font-bold text-white">{pos.symbol}</td>
-                                      <td className="px-6 py-4"><Badge type={pos.type === 'LONG' ? 'success' : 'danger'}>{pos.type}</Badge></td>
+                                      <td className="px-6 py-4">
+                                          <Badge type={['LONG', 'BULL', 'BUY', 'UP'].includes(String(pos.type).toUpperCase()) ? 'success' : 'danger'}>
+                                              {pos.type}
+                                          </Badge>
+                                      </td>
                                       <td className="px-6 py-4 font-mono text-slate-300">{pos.volume}</td>
                                       <td className="px-6 py-4">
                                           <Badge type="success">FILLED</Badge>
@@ -1579,7 +1645,11 @@ export default function NhestTradingBot() {
                                   <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                                       <td className="px-6 py-4 font-mono text-xs text-slate-500">{ord.ticket || '-'}</td>
                                       <td className="px-6 py-4 font-bold text-white">{ord.symbol}</td>
-                                      <td className="px-6 py-4"><Badge type={ord.bias === 'LONG' ? 'success' : 'danger'}>{ord.bias}</Badge></td>
+                                      <td className="px-6 py-4">
+                                          <Badge type={['LONG', 'BULL', 'BUY', 'UP'].includes(String(ord.bias).toUpperCase()) ? 'success' : 'danger'}>
+                                              {ord.bias}
+                                          </Badge>
+                                      </td>
                                       <td className="px-6 py-4 font-mono text-slate-300">{ord.volume || '-'}</td>
                                       <td className="px-6 py-4">
                                           <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 animate-pulse flex items-center gap-2 w-fit">

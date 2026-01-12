@@ -1,5 +1,5 @@
-export type TrendBias = 'LONG' | 'SHORT' | 'HEDGED' | 'NONE';
-export type Status = 'SCANNING' | 'LOCKED' | 'SCALING' | 'INVALIDATED';
+export type TrendBias = 'LONG' | 'SHORT' | 'HEDGED' | 'NONE' | 'BULL' | 'BEAR' | 'BUY' | 'SELL';
+export type Status = 'SCANNING' | 'LOCKED' | 'SCALING' | 'INVALIDATED' | 'MONITOR' | 'IDLE';
 export type TradeType = 'BUY' | 'SELL';
 
 export interface TradeEntry {

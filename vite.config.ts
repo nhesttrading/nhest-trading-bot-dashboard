@@ -16,6 +16,19 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve((process as any).cwd(), '.'),
       },
     },
+    server: {
+      proxy: {
+        '/socket.io': {
+          target: 'http://127.0.0.1:8000',
+          ws: true,
+          changeOrigin: true
+        },
+        '/api': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true
+        }
+      }
+    },
     build: {
       outDir: 'dist', // Output build to a dist folder
       emptyOutDir: true,

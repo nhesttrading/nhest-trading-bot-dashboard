@@ -86,7 +86,7 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                                 </td>
                                 <td className="px-6 py-4 font-bold text-white">{pos.symbol}</td>
                                 <td className="px-6 py-4">
-                                    <Badge type={pos.type === 'LONG' ? 'success' : 'danger'}>{pos.type}</Badge>
+                                    <Badge type={['LONG', 'BULL', 'BUY'].includes(pos.type) ? 'success' : 'danger'}>{pos.type}</Badge>
                                 </td>
                                 <td className="px-6 py-4 font-mono text-slate-300">{pos.volume || '-'}</td>
                                 <td className="px-6 py-4 font-mono text-slate-300">${pos.entryPrice.toFixed(2)}</td>

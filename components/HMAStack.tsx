@@ -82,10 +82,10 @@ export const HMAStack: React.FC<HMAStackProps> = ({ bias, trends }) => {
                 <Activity className="w-3 h-3" />
                 Institutional Trend Matrix
             </span>
-             <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded border ${bias === 'LONG' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : bias === 'SHORT' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                {bias === 'LONG' && <TrendingUp className="w-3 h-3" />}
-                {bias === 'SHORT' && <TrendingDown className="w-3 h-3" />}
-                {bias === 'NONE' && <Minus className="w-3 h-3" />}
+             <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded border ${['LONG', 'BULL', 'BUY'].includes(bias) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ['SHORT', 'BEAR', 'SELL'].includes(bias) ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                {['LONG', 'BULL', 'BUY'].includes(bias) && <TrendingUp className="w-3 h-3" />}
+                {['SHORT', 'BEAR', 'SELL'].includes(bias) && <TrendingDown className="w-3 h-3" />}
+                {['NONE', 'FLAT'].includes(bias) && <Minus className="w-3 h-3" />}
                 {bias} CONSENSUS
              </div>
         </div>

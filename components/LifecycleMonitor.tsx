@@ -43,7 +43,7 @@ export const LifecycleMonitor: React.FC<LifecycleMonitorProps> = ({ status, tren
                 if (currentStep === s.step) {
                     if (s.label === 'INVALID') colorClass = "bg-rose-500 text-white border-rose-600 shadow-[0_0_15px_rgba(244,63,94,0.5)]";
                     else if (s.label === 'LOCKED' || s.label === 'MONITOR' || s.label === 'SCALING') {
-                        colorClass = trendBias === 'LONG' 
+                        colorClass = ['LONG', 'BULL', 'BUY'].includes(trendBias) 
                             ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)]" 
                             : "bg-rose-500 text-white border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.5)]";
                     } else {

@@ -60,14 +60,14 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                     >
                         <Card className={`p-3 transition-colors ${
                             isSelected ? '!border-emerald-500/50 !bg-slate-800' :
-                            state?.trend_bias === 'LONG' ? '!bg-emerald-900/10 !border-emerald-900/40 hover:!bg-emerald-900/20' :
-                            state?.trend_bias === 'SHORT' ? '!bg-rose-900/10 !border-rose-900/40 hover:!bg-rose-900/20' :
+                            ['LONG', 'BULL', 'BUY'].includes(state?.trend_bias || '') ? '!bg-emerald-900/10 !border-emerald-900/40 hover:!bg-emerald-900/20' :
+                            ['SHORT', 'BEAR', 'SELL'].includes(state?.trend_bias || '') ? '!bg-rose-900/10 !border-rose-900/40 hover:!bg-rose-900/20' :
                             '!bg-slate-900/40 hover:!bg-slate-800/60'
                         } ${pulse ? (direction === 'up' ? 'ring-1 ring-emerald-500/50' : 'ring-1 ring-rose-500/50') : ''}`}>
                             <div className="flex justify-between items-start mb-2">
                                 <span className="text-[10px] font-black text-slate-500 tracking-tighter uppercase">{symbol}</span>
-                                {state?.trend_bias === 'LONG' ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : 
-                                 state?.trend_bias === 'SHORT' ? <TrendingDown className="w-3 h-3 text-rose-500" /> : 
+                                {['LONG', 'BULL', 'BUY'].includes(state?.trend_bias || '') ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : 
+                                 ['SHORT', 'BEAR', 'SELL'].includes(state?.trend_bias || '') ? <TrendingDown className="w-3 h-3 text-rose-500" /> : 
                                  <Minus className="w-3 h-3 text-slate-700" />}
                             </div>
                             
@@ -91,8 +91,8 @@ export const MarketScanner: React.FC<MarketScannerProps> = ({ prices, strategySt
                                         <div 
                                             key={i} 
                                             className={`w-1 h-3 rounded-full ${
-                                                trend === 'UP' ? 'bg-emerald-500' : 
-                                                trend === 'DOWN' ? 'bg-rose-500' : 
+                                                ['UP', 'BULL', 'LONG', 'BUY'].includes(trend as string) ? 'bg-emerald-500' : 
+                                                ['DOWN', 'BEAR', 'SHORT', 'SELL'].includes(trend as string) ? 'bg-rose-500' : 
                                                 'bg-slate-800'
                                             }`} 
                                         />

@@ -160,7 +160,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
 
       // 2. Draw Price (Primary)
       const priceVals = data.map(d => d.price);
-      const trendColor = trendBias === 'SHORT' ? '#f43f5e' : trendBias === 'LONG' ? '#10b981' : '#f8fafc';
+      const trendColor = ['SHORT', 'BEAR', 'SELL'].includes(trendBias) ? '#f43f5e' : ['LONG', 'BULL', 'BUY'].includes(trendBias) ? '#10b981' : '#f8fafc';
       drawLine(priceVals, trendColor, 2);
 
       // 3. Fill Area (Gradient)
@@ -176,7 +176,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
       ctx.lineTo(0, height);
       ctx.closePath();
       const grad = ctx.createLinearGradient(0, 0, 0, height);
-      grad.addColorStop(0, trendBias === 'SHORT' ? 'rgba(244, 63, 94, 0.15)' : trendBias === 'LONG' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)');
+      grad.addColorStop(0, ['SHORT', 'BEAR', 'SELL'].includes(trendBias) ? 'rgba(244, 63, 94, 0.15)' : ['LONG', 'BULL', 'BUY'].includes(trendBias) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)');
       grad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = grad;
       ctx.fill();
@@ -241,7 +241,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
         </div>
         {currentPrice && (
             <div className="flex items-baseline gap-2 mt-1">
-                <span className={`text-3xl font-mono font-bold tracking-tight ${trendBias === 'SHORT' ? 'text-rose-500' : trendBias === 'LONG' ? 'text-emerald-500' : 'text-slate-200'}`}>
+                <span className={`text-3xl font-mono font-bold tracking-tight ${['SHORT', 'BEAR', 'SELL'].includes(trendBias) ? 'text-rose-500' : ['LONG', 'BULL', 'BUY'].includes(trendBias) ? 'text-emerald-500' : 'text-slate-200'}`}>
                 {currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </span>
                 

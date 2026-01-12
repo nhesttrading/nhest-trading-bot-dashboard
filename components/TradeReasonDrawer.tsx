@@ -22,12 +22,12 @@ export const TradeReasonDrawer: React.FC<TradeReasonDrawerProps> = ({ trade, onC
                     </button>
                 </div>
                 <div className="space-y-6">
-                    <div className={`p-4 rounded-xl border ${trade.type === 'LONG' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
+                    <div className={`p-4 rounded-xl border ${['LONG', 'BULL', 'BUY'].includes(trade.type) ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <h2 className="text-2xl font-bold text-white">{trade.symbol}</h2>
-                                <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded mt-1 ${trade.type === 'LONG' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                    {trade.type === 'LONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded mt-1 ${['LONG', 'BULL', 'BUY'].includes(trade.type) ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                    {['LONG', 'BULL', 'BUY'].includes(trade.type) ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                                     {trade.type}
                                 </div>
                             </div>
@@ -48,7 +48,7 @@ export const TradeReasonDrawer: React.FC<TradeReasonDrawerProps> = ({ trade, onC
                             </div>
                             <div className="flex justify-between items-center p-3 bg-slate-800 rounded-lg border border-slate-700">
                                 <span className="text-slate-400 text-sm">Confirmation</span>
-                                <span className="text-purple-400 font-mono text-sm">HMA15 Reversed {trade.type === 'LONG' ? 'UP' : 'DOWN'}</span>
+                                <span className="text-purple-400 font-mono text-sm">HMA15 Reversed {['LONG', 'BULL', 'BUY'].includes(trade.type) ? 'UP' : 'DOWN'}</span>
                             </div>
                         </div>
                     </div>

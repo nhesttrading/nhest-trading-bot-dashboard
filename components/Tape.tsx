@@ -11,7 +11,7 @@ interface TapeRow {
   time: string;
   price: number;
   size: number;
-  side: 'BUY' | 'SELL';
+  side: 'BUY' | 'SELL' | 'BULL' | 'BEAR';
 }
 
 export const Tape: React.FC<TapeProps> = ({ symbol, price }) => {
@@ -60,7 +60,7 @@ export const Tape: React.FC<TapeProps> = ({ symbol, price }) => {
                       {rows.map(row => (
                           <tr key={row.id} className="hover:bg-slate-800/30 transition-colors">
                               <td className="px-2 py-0.5 text-slate-500">{row.time}</td>
-                              <td className={`px-2 py-0.5 font-bold ${row.side === 'BUY' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              <td className={`px-2 py-0.5 font-bold ${['BUY', 'BULL', 'LONG'].includes(row.side) ? 'text-emerald-500' : 'text-rose-500'}`}>
                                   {row.price.toFixed(2)}
                               </td>
                               <td className="px-2 py-0.5 text-right text-slate-300">
