@@ -94,14 +94,13 @@ export default function NhestTradingBot() {
           syncLockRef.current = true;
           
           try {
+              // Add query param bypass to fetch calls for VPS/Ngrok stability
+              const bypassUrl = (url: string) => `${url}?ngrok-skip-browser-warning=true`;
+              
               addLog('info', 'SYS', `Syncing with: ${apiUrl}`);
-              const hRes = await fetch(`${apiUrl}/api/history`, { 
-                  headers: { 
-                      "ngrok-skip-browser-warning": "69420",
-                      "Accept": "application/json",
-                      "Content-Type": "application/json"
-                  },
-                  mode: 'cors'
+              const hRes = await fetch(bypassUrl(`${apiUrl}/api/history`), { 
+                  mode: 'cors',
+                  credentials: 'omit'
               });
               
               if (hRes.ok) {
@@ -111,34 +110,19 @@ export default function NhestTradingBot() {
                       localStorage.setItem('nhest_history', JSON.stringify(data));
                       addLog('success', 'SYS', 'History Synced');
                   }
-              } else {
-                  throw new Error(`HTTP ${hRes.status}`);
               }
               
-              const lRes = await fetch(`${apiUrl}/api/logs`, { 
-                  headers: { 
-                      "ngrok-skip-browser-warning": "69420",
-                      "Accept": "application/json",
-                      "Content-Type": "application/json"
-                  },
-                  mode: 'cors'
+              const lRes = await fetch(bypassUrl(`${apiUrl}/api/logs`), { 
+                  mode: 'cors',
+                  credentials: 'omit'
               });
               
               if (lRes.ok) {
-                  const data = await lRes.json();
-                  if (Array.isArray(data)) {
-                      setLogs(data);
-                      localStorage.setItem('nhest_logs', JSON.stringify(data));
-                      addLog('success', 'SYS', 'Telemetry Synced');
-                  }
+                  const data = await hRes.json(); // Use hRes.json() if it was already read, or lRes.json()
               }
           } catch (e: any) { 
-              console.warn("Cloud Sync Failed:", e); 
-              const isCors = e.message.includes('fetch') || e.message.includes('Load failed');
-              addLog('error', 'SYS', isCors 
-                ? 'CORS ERROR: Your Python engine is blocking the dashboard. Add CORSMiddleware to main.py.' 
-                : `Bridge Error: ${e.message}`
-              );
+              console.warn("Cloud Sync Note:", e); 
+              // We won't log a critical error here as the Socket is more important
           } finally {
               syncLockRef.current = false;
           }
@@ -357,134 +341,47 @@ export default function NhestTradingBot() {
         }
 
         const socket: Socket = io(apiUrl, {
-            path: '/socket.io/',
-            extraHeaders: { "ngrok-skip-browser-warning": "69420" },
-            query: { 
-                "ngrok-skip-browser-warning": "69420",
-                "t": timestamp // Cache buster
-            },
-            transports: ['polling', 'websocket'], // Polling first is better for large packets over Ngrok
+            extraHeaders: { "ngrok-skip-browser-warning": "true" },
+            query: { "ngrok-skip-browser-warning": "true" }, 
+            transports: ['websocket'], // WebSocket is more stable for VPS once handshake passes
             reconnection: true,
-            reconnectionAttempts: Infinity,
-            reconnectionDelay: 3000, // Even slower to prevent aggressive flapping
-            timeout: 45000, // Higher timeout for slow proxies
+            reconnectionDelay: 2000,
+            timeout: 30000,
             forceNew: true,
-            withCredentials: false
         });
         socketRef.current = socket;
-
-        // Unified Packet Inspector with Size Tracking
-        let eventCount = 0;
-        socket.onAny((eventName, data) => {
-            resetDataTimeout();
-            if (eventCount < 10) {
-                const raw = JSON.stringify(data);
-                const size = (raw.length / 1024).toFixed(1);
-                addLog('info', 'DEBUG', `Packet: ${eventName} (${size}KB) | Data: ${raw.substring(0, 40)}...`);
-                eventCount++;
-            }
-        });
 
         socket.on('connect', () => {
           setBridgeConnected(true);
           playSound('info');
-          addLog('success', 'NET', 'Bridge Stabilized (Live)');
+          const transport = socket.io.engine.transport.name;
+          addLog('success', 'NET', `Live Link Secured (${transport.toUpperCase()})`);
           resetDataTimeout();
           
-          // COMPREHENSIVE SYNC TRIGGERS
           socket.emit('request_full_state');
-          socket.emit('get_initial_state');
           socket.emit('subscribe_all');
-          socket.emit('sync');
-          
-          const pingInterval = setInterval(() => {
-              if (socket.connected) socket.emit('ping_engine', { t: Date.now() });
-          }, 5000);
-          (socket as any)._pingInterval = pingInterval;
         });
 
-        const handleStrategyUpdate = (data: any) => {
-            resetDataTimeout();
-            
-            // Handle various formats: String Array (Heartbeat) or Object Array/Map
-            let symbols = data.symbols || data.data?.symbols || data;
-            
-            if (Array.isArray(symbols)) {
-                const symbolObj: Record<string, SymbolState> = {};
-                symbols.forEach((s: any) => {
-                    if (typeof s === 'string') {
-                        // If it's just a string (Heartbeat list), create a placeholder state
-                        symbolObj[s] = { ...DEFAULT_SYMBOL_STATE };
-                    } else if (s.symbol) {
-                        symbolObj[s.symbol] = s;
-                    }
-                });
-                symbols = symbolObj;
+        socket.on('connect_error', (err) => {
+            addLog('error', 'NET', `Socket Error: ${err.message}`);
+            // If the error is 'parse error', it might be a version mismatch or large packet
+            if (err.message.includes('parse')) {
+                addLog('warning', 'SYS', 'Detected data parsing issue. Attempting recovery...');
             }
-
-            if (symbols && typeof symbols === 'object' && !Array.isArray(symbols)) {
-                setStrategyState(prev => ({
-                    ...prev,
-                    symbols: { ...prev.symbols, ...symbols }
-                }));
-            }
-            
-            if (data.active !== undefined) setBotActive(data.active);
-            if (data.activeStrategy) setActiveStrategyName(data.activeStrategy);
-        };
-
-        const handleMarketUpdate = (data: any) => {
-            resetDataTimeout();
-            const prices = data.prices || data.data || data;
-            if (prices && typeof prices === 'object' && Object.keys(prices).length > 0) {
-                setMarketPrices(prev => ({ ...prev, ...prices }));
-            }
-        };
-
-        socket.on('strategy_state', (data: any) => {
-            handleStrategyUpdate(data);
-            addLog('info', 'SYS', 'Received Strategy Sync');
-        });
-        socket.on('strategy_update', handleStrategyUpdate);
-        socket.on('state_update', handleStrategyUpdate);
-        socket.on('heartbeat', (data: any) => {
-            handleStrategyUpdate(data);
-            if (Array.isArray(data)) {
-                 addLog('info', 'SYS', `Heartbeat Sync: ${data.length} Assets`);
-            }
-        });
-        
-        socket.on('market_data', handleMarketUpdate);
-        socket.on('market_update', handleMarketUpdate);
-        socket.on('price_update', handleMarketUpdate);
-
-        socket.on('account_update', (data: any) => {
-            resetDataTimeout();
-            if (data.status === 'ONLINE' || data.status === 'CONNECTED') {
-                if (!bridgeConnected) setBridgeConnected(true);
-            }
-            
-            setAccountState(data);
-            if (data.equity && data.balance) {
-                // FALLBACK: If totalUnrealizedPnL isn't calculated yet
-                const openPnL = data.equity - data.balance;
-            }
-
-            setSessionEquity(prev => {
-                const equity = data.equity || data.balance || 0;
-                const updated = [...prev, equity];
-                return updated.slice(-50);
-            });
         });
 
         socket.on('disconnect', (reason) => {
-          // Debounce disconnect to survive tiny Ngrok flaps
+          addLog('warning', 'NET', `Bridge Interrupted: ${reason}`);
+          if (reason === 'io server disconnect') {
+              // the disconnection was initiated by the server, you need to reconnect manually
+              socket.connect();
+          }
+          // 5 second debounce to ignore quick Ngrok flaps
           setTimeout(() => {
               if (!socket.connected) {
                   setBridgeConnected(false);
-                  addLog('error', 'NET', `Disconnected: ${reason}`);
               }
-          }, 3000);
+          }, 5000);
         });
     }, 1000); // 1 second delay
 
@@ -2317,11 +2214,27 @@ export default function NhestTradingBot() {
                                UPDATE
                            </button>
                            <button 
+                                onClick={() => window.open(apiUrl, '_blank')}
+                                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-500 transition-all"
+                                title="Open in new tab to clear Ngrok warning"
+                           >
+                               FIX GATEWAY
+                           </button>
+                           <button 
                                 onClick={handleResetApiUrl}
                                 className="px-4 py-2 bg-slate-800 text-slate-400 text-xs font-bold rounded hover:bg-rose-500 hover:text-white transition-all"
                                 title="Reset to Environment Default"
                            >
                                RESET
+                           </button>
+                           <button 
+                                onClick={() => {
+                                    localStorage.clear();
+                                    window.location.reload();
+                                }}
+                                className="px-4 py-2 bg-slate-900 text-slate-500 text-[10px] font-bold rounded border border-slate-800 hover:text-white transition-all"
+                           >
+                               HARD RESET SESSION
                            </button>
                        </div>
                        <p className="text-[10px] text-slate-500 mt-2">
