@@ -40,7 +40,6 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 
 // CONNECTIVITY CONFIGURATION
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'https://nhesttradingbot.ngrok.app'; 
-const bypass = "?ngrok-skip-browser-warning=1";
 
 export default function NhestTradingBot() {
   // Initialize from storage, host-detection, or env
@@ -291,15 +290,7 @@ export default function NhestTradingBot() {
   // --- AUDIO ENGINE ---
   const playSound = (type: 'success' | 'error' | 'info' | 'neutral') => {
       try {
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (!AudioContextClass) return;
-          
-          const ctx = new AudioContextClass();
-          if (ctx.state === 'suspended') {
-              // Browser policy: Audio must be triggered by user gesture
-              return;
-          }
-          
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           
@@ -537,89 +528,84 @@ export default function NhestTradingBot() {
   const pendingOrders: any[] = [];
   let totalUnrealizedPnL = 0;
   
-  if (strategyState && strategyState.symbols) {
-      Object.entries(strategyState.symbols).forEach(([sym, state]: [string, SymbolState]) => {
-          if (!state) return;
+  Object.entries(strategyState.symbols).forEach(([sym, state]: [string, SymbolState]) => {
+      // 1. Generic Watchlist (LOCKED status, no entries)
+      if (state.status === 'LOCKED' && (!state.entries || state.entries.length === 0)) {
+           pendingOrders.push({
+               symbol: sym,
+               bias: state.trend_bias,
+               status: state.status,
+               currentPrice: marketPrices[sym] || 0
+           });
+           return;
+      }
 
-          // 1. Generic Watchlist (LOCKED status, no entries)
-          if (state.status === 'LOCKED' && (!state.entries || state.entries.length === 0)) {
-               pendingOrders.push({
-                   symbol: sym,
-                   bias: state.trend_bias,
-                   status: state.status,
-                   currentPrice: marketPrices[sym] || 0
-               });
-               return;
-          }
+      // 2. Process Entries
+      if (state.entries && state.entries.length > 0) {
+          state.entries.forEach((entry, idx) => {
+            // DETECT PENDING ORDERS
+            // Explicit type check from backend
+            let isPending = entry.type === 'PENDING';
 
-          // 2. Process Entries
-          if (state.entries && Array.isArray(state.entries) && state.entries.length > 0) {
-              state.entries.forEach((entry, idx) => {
-                if (!entry) return;
-                // DETECT PENDING ORDERS
-                // Explicit type check from backend
-                let isPending = entry.type === 'PENDING';
-
-                // Fallback checks
-                if (!isPending) {
-                    const reasonStr = (entry.reason || "").toLowerCase();
-                    isPending = reasonStr.includes('pending');
-                    
-                    // Backend PnL always confirms Active (Safety Net)
-                    if (entry.pnl !== undefined || entry.profit !== undefined) {
-                        isPending = false;
-                    }
+            // Fallback checks
+            if (!isPending) {
+                const reasonStr = (entry.reason || "").toLowerCase();
+                isPending = reasonStr.includes('pending');
+                
+                // Backend PnL always confirms Active (Safety Net)
+                if (entry.pnl !== undefined || entry.profit !== undefined) {
+                    isPending = false;
                 }
+            }
 
-                if (isPending) {
-                    pendingOrders.push({
-                          symbol: sym,
-                          bias: entry.type || state.trend_bias,
-                          status: state.status,
-                          currentPrice: marketPrices[sym] || 0,
-                          limitPrice: entry.price,
-                          ticket: entry.ticket,
-                          volume: entry.volume
-                    });
-                } else {
-                    // ACTIVE POSITION
-                    // Includes LOCKED status trades that are filled
-                    const currentP = marketPrices[sym];
-                    let pnl = 0;
-                    
-                    // Determine direction from entry.type or fallback to state.trend_bias
-                    const posType = entry.type || state.trend_bias;
+            if (isPending) {
+                pendingOrders.push({
+                      symbol: sym,
+                      bias: entry.type || state.trend_bias,
+                      status: state.status,
+                      currentPrice: marketPrices[sym] || 0,
+                      limitPrice: entry.price,
+                      ticket: entry.ticket,
+                      volume: entry.volume
+                });
+            } else {
+                // ACTIVE POSITION
+                // Includes LOCKED status trades that are filled
+                const currentP = marketPrices[sym];
+                let pnl = 0;
+                
+                // Determine direction from entry.type or fallback to state.trend_bias
+                const posType = entry.type || state.trend_bias;
 
-                    // Use Backend PnL if available, otherwise calculate fallback
-                    if (entry.pnl !== undefined) {
-                        pnl = entry.pnl;
-                    } else if (entry.profit !== undefined) {
-                        pnl = entry.profit;
-                    } else if (currentP) {
-                        let rawDiff = (currentP - entry.price) / entry.price;
-                        if (['SHORT', 'BEAR', 'SELL'].includes(posType)) rawDiff = -rawDiff;
-                        pnl = rawDiff * 10000; 
-                    }
-                    
-                    totalUnrealizedPnL += pnl;
-                    
-                    activePositions.push({
-                        symbol: sym,
-                        type: posType,
-                        entryPrice: entry.price,
-                        pnl: pnl,
-                        layer: idx + 1,
-                        reason: entry.reason || "Auto HMA",
-                        time: entry.time ? new Date(entry.time).toLocaleTimeString() : "--:--:--",
-                        status: state.status, 
-                        ticket: entry.ticket,
-                        volume: entry.volume
-                    });
+                // Use Backend PnL if available, otherwise calculate fallback
+                if (entry.pnl !== undefined) {
+                    pnl = entry.pnl;
+                } else if (entry.profit !== undefined) {
+                    pnl = entry.profit;
+                } else if (currentP) {
+                    let rawDiff = (currentP - entry.price) / entry.price;
+                    if (['SHORT', 'BEAR', 'SELL'].includes(posType)) rawDiff = -rawDiff;
+                    pnl = rawDiff * 10000; 
                 }
-              });
-          }
-      });
-  }
+                
+                totalUnrealizedPnL += pnl;
+                
+                activePositions.push({
+                    symbol: sym,
+                    type: posType,
+                    entryPrice: entry.price,
+                    pnl: pnl,
+                    layer: idx + 1,
+                    reason: entry.reason || "Auto HMA",
+                    time: new Date(entry.time).toLocaleTimeString(),
+                    status: state.status, 
+                    ticket: entry.ticket,
+                    volume: entry.volume
+                });
+            }
+          });
+      }
+  });
 
   const activeLongs = activePositions.filter(p => ['LONG', 'BULL', 'BUY'].includes(p.type)).length;
   const activeShorts = activePositions.filter(p => ['SHORT', 'BEAR', 'SELL'].includes(p.type)).length;
@@ -943,8 +929,8 @@ export default function NhestTradingBot() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-slate-900/60 to-slate-800/60">
                 <div className="text-slate-500 text-[10px] uppercase font-black mb-1 tracking-wider">Unrealized PnL</div>
-                <div className={`text-2xl font-mono font-bold ${(Number(totalUnrealizedPnL) || 0) > 0 ? 'text-emerald-400' : (Number(totalUnrealizedPnL) || 0) < 0 ? 'text-rose-400' : 'text-slate-200'}`}>
-                    {(Number(totalUnrealizedPnL) || 0) >= 0 ? '+' : ''}{(Number(totalUnrealizedPnL) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                <div className={`text-2xl font-mono font-bold ${totalUnrealizedPnL > 0 ? 'text-emerald-400' : totalUnrealizedPnL < 0 ? 'text-rose-400' : 'text-slate-200'}`}>
+                    {totalUnrealizedPnL >= 0 ? '+' : ''}{totalUnrealizedPnL.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </div>
                 <div className="text-[10px] text-slate-600 font-bold mt-1">
                    Aggregate floating delta
@@ -960,8 +946,8 @@ export default function NhestTradingBot() {
             </Card>
              <Card>
                 <div className="text-slate-500 text-[10px] uppercase font-black mb-1 tracking-wider">Active Logic</div>
-                <div className="text-lg font-mono font-bold text-purple-400 truncate" title={String(activeStrategyName || "...")}>
-                    {String(activeStrategyName || "Omni-V2")}
+                <div className="text-lg font-mono font-bold text-purple-400 truncate" title={activeStrategyName}>
+                    {activeStrategyName}
                 </div>
                 <div className="text-[10px] text-slate-600 font-bold mt-1 uppercase">Engine Sequence</div>
             </Card>
