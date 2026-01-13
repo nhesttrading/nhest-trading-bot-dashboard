@@ -86,25 +86,27 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                                 </td>
                                 <td className="px-6 py-4 font-bold text-white">{pos.symbol}</td>
                                 <td className="px-6 py-4">
-                                    <Badge type={['LONG', 'BULL', 'BUY'].includes(pos.type) ? 'success' : 'danger'}>{pos.type}</Badge>
+                                    <Badge type={['LONG', 'BULL', 'BUY'].includes(pos.type || '') ? 'success' : 'danger'}>{pos.type || 'N/A'}</Badge>
                                 </td>
                                 <td className="px-6 py-4 font-mono text-slate-300">{pos.volume || '-'}</td>
-                                <td className="px-6 py-4 font-mono text-slate-300">${pos.entryPrice.toFixed(2)}</td>
+                                <td className="px-6 py-4 font-mono text-slate-300">
+                                    {pos.entryPrice ? `$${pos.entryPrice.toFixed(2)}` : '---'}
+                                </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
                                         <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-slate-500">
                                             <ArrowRight className="w-3 h-3" />
                                         </span>
                                         <span className="font-medium text-slate-200 bg-slate-800/50 px-2 py-1 rounded border border-slate-700/50 text-xs">
-                                            {pos.reason}
+                                            {pos.reason || 'No Logic Provided'}
                                         </span>
                                     </div>
                                 </td>
                                 <td className={`px-6 py-4 font-bold font-mono text-right ${
                                     pos.statusDisplay === 'CANCELLED' ? 'text-slate-500' :
-                                    pos.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                    (pos.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
                                 }`}>
-                                    {pos.statusDisplay === 'CANCELLED' ? '-' : (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(2)}
+                                    {pos.statusDisplay === 'CANCELLED' ? '-' : ((pos.pnl || 0) >= 0 ? '+' : '') + (pos.pnl || 0).toFixed(2)}
                                 </td>
                             </tr>
                         ))
