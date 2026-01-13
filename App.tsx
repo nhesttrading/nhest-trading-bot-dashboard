@@ -42,6 +42,7 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'https://nhesttradingbot.ngrok.app'; 
 
 export default function NhestTradingBot() {
+  console.log("NhestTradingBot: Starting render");
   // Initialize from storage, host-detection, or env
   const [apiUrl, setApiUrl] = useState(() => {
     const saved = localStorage.getItem('nhest_api_url');
