@@ -29,6 +29,7 @@ export interface StrategyState {
 }
 
 export interface ActivePosition {
+  id?: string;
   symbol: string;
   type: TrendBias;
   entryPrice: number;

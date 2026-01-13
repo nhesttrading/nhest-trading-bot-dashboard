@@ -168,7 +168,26 @@ export default function NhestTradingBot() {
   const prevPositionsRef = useRef<ActivePosition[]>([]);
   const prevPendingRef = useRef<any[]>([]); // Track Pending Orders
   
-  const [sessionEquity, setSessionEquity] = useState<number[]>([]);
+  const [sessionEquity, setSessionEquity] = useState<number[]>(() => {
+      try {
+          const saved = localStorage.getItem('nhest_equity_session');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+  });
+  
+  // Track Equity for Performance Curve
+  useEffect(() => {
+      if (accountState?.equity) {
+          setSessionEquity(prev => {
+              const last = prev[prev.length - 1];
+              if (last === accountState.equity) return prev;
+              const updated = [...prev, accountState.equity].slice(-100);
+              localStorage.setItem('nhest_equity_session', JSON.stringify(updated));
+              return updated;
+          });
+      }
+  }, [accountState?.equity]);
+
   const [webhookLogs, setWebhookLogs] = useState<WebhookEvent[]>([]);
   // Automation State
   interface AutoRule {
@@ -526,6 +545,16 @@ export default function NhestTradingBot() {
                    setAccountState(data);
               }
 
+              // 4. History (Periodic Sync)
+              const histRes = await fetch(`${apiUrl}/api/history`, { headers });
+              if (histRes.ok) {
+                  const data = await histRes.json();
+                  if (Array.isArray(data)) {
+                      setClosedTrades(data);
+                      localStorage.setItem('nhest_history', JSON.stringify(data));
+                  }
+              }
+
           } catch (e) {
               // Silent fail on pulse to avoid log spam
           }
@@ -556,18 +585,19 @@ export default function NhestTradingBot() {
       if (state.entries && state.entries.length > 0) {
           state.entries.forEach((entry, idx) => {
             // DETECT PENDING ORDERS
-            // Explicit type check from backend
-            let isPending = entry.type === 'PENDING';
+            // Robust check for pending status
+            const reasonStr = (entry.reason || "").toLowerCase();
+            const entryType = (entry.type || "").toUpperCase();
+            
+            let isPending = entryType === 'PENDING' || 
+                           entryType === 'LIMIT' || 
+                           entryType === 'STOP' || 
+                           reasonStr.includes('pending') ||
+                           state.status === 'LOCKED';
 
-            // Fallback checks
-            if (!isPending) {
-                const reasonStr = (entry.reason || "").toLowerCase();
-                isPending = reasonStr.includes('pending');
-                
-                // Backend PnL always confirms Active (Safety Net)
-                if (entry.pnl !== undefined || entry.profit !== undefined) {
-                    isPending = false;
-                }
+            // Backend PnL or Profit field always confirms Active (Override Safety Net)
+            if (entry.pnl !== undefined || entry.profit !== undefined) {
+                isPending = false;
             }
 
             if (isPending) {
@@ -612,7 +642,8 @@ export default function NhestTradingBot() {
                     time: new Date(entry.time).toLocaleTimeString(),
                     status: state.status, 
                     ticket: entry.ticket,
-                    volume: entry.volume
+                    volume: entry.volume,
+                    id: entry.ticket ? `t-${entry.ticket}` : `${sym}-${idx}-${entry.price}`
                 });
             }
           });
@@ -628,17 +659,17 @@ export default function NhestTradingBot() {
       if (!bridgeConnected) return;
 
       // 1. Detect Closed Active Trades
-      const currentIds = new Set(activePositions.map(p => p.ticket || p.symbol));
+      const currentIds = new Set(activePositions.map(p => p.id));
       const newlyClosed = prevPositionsRef.current.filter(p => 
-          !currentIds.has(p.ticket || p.symbol)
+          !currentIds.has(p.id)
       );
 
       // 2. Detect Cancelled Pending Orders
-      const currentPendingIds = new Set(pendingOrders.map(p => p.ticket || p.symbol));
-      const newlyCancelled = prevPendingRef.current.filter(p => 
-          !currentPendingIds.has(p.ticket || p.symbol) &&
-          !currentIds.has(p.ticket || p.symbol) // Ensure it didn't just move to Active (Fill)
-      );
+      const currentPendingIds = new Set(pendingOrders.map(p => p.ticket ? `t-${p.ticket}` : `${p.symbol}-${p.limitPrice}`));
+      const newlyCancelled = prevPendingRef.current.filter(p => {
+          const pid = p.ticket ? `t-${p.ticket}` : `${p.symbol}-${p.limitPrice}`;
+          return !currentPendingIds.has(pid) && !currentIds.has(pid);
+      });
 
       if (newlyClosed.length > 0 || newlyCancelled.length > 0) {
           const closed = newlyClosed.map(p => ({ ...p, finalStatus: 'FILLED' as const }));
@@ -2075,7 +2106,8 @@ export default function NhestTradingBot() {
 
   const renderAnalytics = () => {
       // --- ADVANCED CALCULATIONS ---
-      const trades = closedTrades.filter(t => t.finalStatus === 'FILLED');
+      // Include any trade that isn't explicitly cancelled
+      const trades = closedTrades.filter(t => t.finalStatus !== 'CANCELLED');
       const wins = trades.filter(t => (t.pnl || 0) > 0);
       const losses = trades.filter(t => (t.pnl || 0) <= 0);
       
@@ -2582,6 +2614,15 @@ export default function NhestTradingBot() {
                         {totalUnrealizedPnL >= 0 ? '+' : ''}{totalUnrealizedPnL.toLocaleString(undefined, {minimumFractionDigits: 2})}
                      </div>
                  </div>
+                 
+                 <button 
+                    onClick={() => setReconnectCounter(prev => prev + 1)}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 rounded-lg transition-colors border border-slate-700"
+                    title="Refresh Data & Sync Bridge"
+                 >
+                    <RefreshCw className={`w-4 h-4 ${!bridgeConnected ? 'animate-spin text-rose-400' : ''}`} />
+                 </button>
+
                  {/* Profile Menu */}
                  <div className="relative">
                      <button 
