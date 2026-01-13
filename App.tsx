@@ -103,7 +103,6 @@ export default function NhestTradingBot() {
           
           try {
               // PRIME THE TUNNEL: Security bypass for Ngrok VPS
-              const bypass = '?ngrok-skip-browser-warning=true';
               await fetch(`${apiUrl}/socket.io/${bypass}`, { mode: 'no-cors' });
               
               addLog('info', 'SYS', `Syncing Gateway: ${apiUrl}`);
@@ -146,7 +145,6 @@ export default function NhestTradingBot() {
           method: 'POST',
           headers: { 
               "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "69420"
           },
           body: JSON.stringify(newHistory)
       }).catch(e => console.warn("Cloud Sync Failed (Save)"));
@@ -344,11 +342,11 @@ export default function NhestTradingBot() {
 
         const socket: Socket = io(apiUrl, {
             path: '/socket.io/',
-            query: { "ngrok-skip-browser-warning": "true" }, 
             transports: ['websocket'], // FORCE WEBSOCKET ONLY to avoid Ngrok polling errors
             reconnection: true,
-            reconnectionDelay: 3000,
-            timeout: 20000,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
+            timeout: 45000,
             forceNew: true,
             withCredentials: false
         });
@@ -475,7 +473,6 @@ export default function NhestTradingBot() {
 
       const runPulse = async () => {
           const headers = { 
-              "ngrok-skip-browser-warning": "true",
               "Content-Type": "application/json"
           };
           
@@ -734,7 +731,6 @@ export default function NhestTradingBot() {
 
       // STRATEGY 3: HTTP Global Endpoint (Backup)
       try {
-        await fetch(`${apiUrl}/api/kill`, { method: 'POST', headers: { "ngrok-skip-browser-warning": "69420" } });
       } catch (e) { console.error(e); }
   };
 
@@ -749,7 +745,6 @@ export default function NhestTradingBot() {
             method: 'POST', 
             headers: { 
                 "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "69420" 
             },
             body: JSON.stringify({ 
                 symbol: ticket ? undefined : symbol, 
@@ -775,7 +770,6 @@ export default function NhestTradingBot() {
             method: 'POST', 
             headers: { 
                 "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "69420" 
             },
             body: JSON.stringify({ 
                 symbol: selectedSymbol, 
@@ -805,7 +799,6 @@ export default function NhestTradingBot() {
               method: 'POST', 
               headers: { 
                   "Content-Type": "application/json",
-                  "ngrok-skip-browser-warning": "69420" 
               },
               body: JSON.stringify(payload)
           });
