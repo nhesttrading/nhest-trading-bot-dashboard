@@ -42,7 +42,6 @@ const DEFAULT_SYMBOL_STATE: SymbolState = {
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'https://nhesttradingbot.ngrok.app'; 
 
 export default function NhestTradingBot() {
-  console.log("NhestTradingBot: Starting render");
   // Initialize from storage, host-detection, or env
   const [apiUrl, setApiUrl] = useState(() => {
     const saved = localStorage.getItem('nhest_api_url');
@@ -107,11 +106,17 @@ export default function NhestTradingBot() {
           
           try {
               // PRIME THE TUNNEL: Security bypass for Ngrok VPS
-              await fetch(`${apiUrl}/socket.io/${bypass}`, { mode: 'no-cors' });
+              await fetch(apiUrl, { 
+                  mode: 'no-cors',
+                  headers: { 'ngrok-skip-browser-warning': 'true' }
+              });
               
               addLog('info', 'SYS', `Syncing Gateway: ${apiUrl}`);
               
-              const hRes = await fetch(`${apiUrl}/api/history${bypass}`, { mode: 'cors' });
+              const hRes = await fetch(`${apiUrl}/api/history`, { 
+                  mode: 'cors',
+                  headers: { 'ngrok-skip-browser-warning': 'true' }
+              });
               if (hRes.ok) {
                   const data = await hRes.json();
                   if (Array.isArray(data)) {
@@ -121,7 +126,10 @@ export default function NhestTradingBot() {
                   }
               }
               
-              const lRes = await fetch(`${apiUrl}/api/logs${bypass}`, { mode: 'cors' });
+              const lRes = await fetch(`${apiUrl}/api/logs`, { 
+                  mode: 'cors',
+                  headers: { 'ngrok-skip-browser-warning': 'true' }
+              });
               if (lRes.ok) {
                   const data = await lRes.json();
                   if (Array.isArray(data)) {

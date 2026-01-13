@@ -9,7 +9,6 @@ interface LockScreenProps {
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
-  console.log("LockScreen: Rendering");
   const [inputCode, setInputCode] = useState("");
   const [error, setError] = useState(false);
 
