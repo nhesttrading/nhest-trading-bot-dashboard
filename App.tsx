@@ -1061,8 +1061,8 @@ export default function NhestTradingBot() {
                             {activePositions.slice(0,3).map((p, i) => (
                                 <div key={i} className="flex justify-between items-center p-2 bg-slate-800/50 rounded border border-slate-800">
                                     <span className="text-xs font-bold text-white">{p.symbol}</span>
-                                    <span className={`text-xs font-mono font-bold ${p.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {p.pnl >= 0 ? '+' : ''}{p.pnl.toFixed(2)}
+                                    <span className={`text-xs font-mono font-bold ${(p.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {(p.pnl || 0) >= 0 ? '+' : ''}{(p.pnl || 0).toFixed(2)}
                                     </span>
                                 </div>
                             ))}
@@ -1233,7 +1233,7 @@ export default function NhestTradingBot() {
     };
 
     const openPnL = accountState ? accountState.equity - accountState.balance : 0;
-    const exposure = activePositions.reduce((acc, p) => acc + p.entryPrice, 0);
+    const exposure = activePositions.reduce((acc, p) => acc + (p.entryPrice || 0), 0);
 
     return (
         <div className="space-y-6 animate-in fade-in h-full flex flex-col">
@@ -1601,10 +1601,10 @@ export default function NhestTradingBot() {
                                           <Badge type="success">FILLED</Badge>
                                       </td>
                                       <td className="px-6 py-4 text-xs font-mono text-slate-400">{pos.reason}</td>
-                                      <td className="px-6 py-4 font-mono">${pos.entryPrice.toFixed(2)}</td>
+                                      <td className="px-6 py-4 font-mono">${(pos.entryPrice || 0).toFixed(2)}</td>
                                       <td className="px-6 py-4 font-mono">${(marketPrices[pos.symbol] || 0).toFixed(2)}</td>
-                                      <td className={`px-6 py-4 font-bold font-mono ${pos.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                          {pos.pnl >= 0 ? '+' : ''}{pos.pnl.toFixed(2)}
+                                      <td className={`px-6 py-4 font-bold font-mono ${(pos.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                          {(pos.pnl || 0) >= 0 ? '+' : ''}{(pos.pnl || 0).toFixed(2)}
                                       </td>
                                       <td className="px-6 py-4 text-xs">{pos.time}</td>
                                       <td className="px-6 py-4 text-right">
@@ -2227,14 +2227,14 @@ export default function NhestTradingBot() {
                            <div key={sym}>
                                <div className="flex justify-between items-center text-xs mb-1.5">
                                    <span className="font-bold text-slate-300">{sym}</span>
-                                   <span className={`font-mono font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                       {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
+                                   <span className={`font-mono font-bold ${(pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                       {(pnl || 0) >= 0 ? '+' : ''}{(pnl || 0).toFixed(2)}
                                    </span>
                                </div>
                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                    <div 
-                                       className={`h-full transition-all duration-1000 ${pnl >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} 
-                                       style={{width: `${Math.min(Math.abs(pnl) / (totalProfit || 1) * 100, 100)}%`}}
+                                       className={`h-full transition-all duration-1000 ${(pnl || 0) >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} 
+                                       style={{width: `${Math.min(Math.abs(pnl || 0) / (totalProfit || 1) * 100, 100)}%`}}
                                    ></div>
                                </div>
                            </div>

@@ -33,8 +33,8 @@ export const TradeReasonDrawer: React.FC<TradeReasonDrawerProps> = ({ trade, onC
                             </div>
                             <div className="text-right">
                                 <div className="text-xs text-slate-400 uppercase">PnL</div>
-                                <div className={`text-xl font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                                <div className={`text-xl font-mono font-bold ${(trade.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {(trade.pnl || 0) >= 0 ? '+' : ''}{(trade.pnl || 0).toFixed(2)}
                                 </div>
                             </div>
                         </div>
@@ -55,7 +55,7 @@ export const TradeReasonDrawer: React.FC<TradeReasonDrawerProps> = ({ trade, onC
                     <div className="border-t border-slate-800 pt-4">
                         <div className="flex justify-between text-xs text-slate-500">
                             <span>Entry Price</span>
-                            <span className="text-slate-300 font-mono">${trade.entryPrice.toFixed(2)}</span>
+                            <span className="text-slate-300 font-mono">${(trade.entryPrice || 0).toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
