@@ -93,6 +93,9 @@ export default function NhestTradingBot() {
       } catch (e) { return []; }
   });
 
+  // PRIME THE TUNNEL: Security bypass for Ngrok VPS
+  const bypass = '';
+
   // --- CLOUD SYNC ---
   const syncLockRef = useRef(false);
   
