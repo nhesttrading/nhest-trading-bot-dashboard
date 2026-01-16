@@ -6,6 +6,7 @@ export interface TradeEntry {
   price: number;
   time: number;
   reason: string;
+  ai_reasoning?: string;
   type?: string; // Support for 'PENDING' or other status types from backend
   pnl?: number; // Optional: Allow backend to provide actual PnL
   profit?: number; // Alternate PnL field name (MT5 standard)
@@ -36,6 +37,7 @@ export interface ActivePosition {
   pnl: number;
   layer: number;
   reason: string;
+  ai_reasoning?: string;
   time: string;
   status?: Status; // Added status to help filter pending/active
   ticket?: number; // MT5 Ticket ID

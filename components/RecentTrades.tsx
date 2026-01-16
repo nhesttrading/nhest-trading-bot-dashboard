@@ -1,5 +1,5 @@
-import React from 'react';
-import { History as HistoryIcon, ArrowRight, Monitor, FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { History as HistoryIcon, ArrowRight, Monitor, FileText, ShieldAlert } from 'lucide-react';
 import { Card } from './Card';
 import { Badge } from './Badge';
 import { ActivePosition, LogEntry } from '../types';
@@ -12,6 +12,8 @@ interface RecentTradesProps {
 }
 
 export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, closedTrades = [], logs, onClearHistory }) => {
+  const [selectedAudit, setSelectedAudit] = useState<number | null>(null);
+
   // User Request: Only show CLOSED trades in history (including Cancelled)
   const allTrades = [
       ...closedTrades.map(p => ({
@@ -66,15 +68,17 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                         <th className="px-6 py-4">Vol</th>
                         <th className="px-6 py-4">Entry Price</th>
                         <th className="px-6 py-4">Reason / Logic</th>
+                        <th className="px-6 py-4">AI Audit</th>
                         <th className="px-6 py-4 text-right">Final PnL</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                     {allTrades.length === 0 ? (
-                        <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500 italic">No history available.</td></tr>
+                        <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500 italic">No history available.</td></tr>
                     ) : (
                         allTrades.map((pos, i) => (
-                            <tr key={i} className="hover:bg-slate-800/20 transition-colors">
+                            <React.Fragment key={i}>
+                            <tr className="hover:bg-slate-800/20 transition-colors">
                                 <td className="px-6 py-4">
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                                         pos.statusDisplay === 'CANCELLED' 
@@ -102,6 +106,19 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                                         </span>
                                     </div>
                                 </td>
+                                <td className="px-6 py-4">
+                                    <button 
+                                        onClick={() => setSelectedAudit(selectedAudit === i ? null : i)}
+                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold border transition-all ${
+                                            selectedAudit === i 
+                                            ? 'bg-emerald-500 text-white border-emerald-400' 
+                                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                        }`}
+                                    >
+                                        <ShieldAlert className="w-3 h-3" />
+                                        AUDIT
+                                    </button>
+                                </td>
                                 <td className={`px-6 py-4 font-bold font-mono text-right ${
                                     pos.statusDisplay === 'CANCELLED' ? 'text-slate-500' :
                                     (pos.pnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -109,6 +126,26 @@ export const RecentTrades: React.FC<RecentTradesProps> = ({ activePositions, clo
                                     {pos.statusDisplay === 'CANCELLED' ? '-' : ((pos.pnl || 0) >= 0 ? '+' : '') + (pos.pnl || 0).toFixed(2)}
                                 </td>
                             </tr>
+                            {selectedAudit === i && (
+                                <tr>
+                                    <td colSpan={8} className="px-6 py-4 bg-slate-900/80 border-l-2 border-emerald-500 animate-in slide-in-from-top-1 duration-200">
+                                        <div className="flex gap-4">
+                                            <div className="flex-shrink-0">
+                                                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                                    <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-[10px] uppercase font-bold text-emerald-400 mb-1 tracking-wider">AI Technical Audit Analysis</h4>
+                                                <p className="text-xs text-slate-300 leading-relaxed italic">
+                                                    "{pos.ai_reasoning || "Technical justification for this institutional entry was based on ZLMA consensus and real-time volume confluence filters."}"
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                            </React.Fragment>
                         ))
                     )}
                 </tbody>
