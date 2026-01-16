@@ -2184,15 +2184,30 @@ export default function NhestTradingBot() {
               return timeA - timeB;
           });
           
-          let cum = accountState ? accountState.balance - trades.reduce((acc, t) => acc + (t.pnl || 0), 0) : 0;
-          const history = sorted.map(t => {
+          // Initial balance calculation
+          let currentBalance = accountState ? accountState.balance : 0;
+          let currentEquity = accountState ? accountState.equity : 0;
+          
+          // Starting point: balance before these trades
+          let cum = currentBalance - trades.reduce((acc, t) => acc + (t.pnl || 0), 0);
+          const history = [cum]; // Start with initial balance
+          
+          sorted.forEach(t => {
               cum += (t.pnl || 0);
-              return cum;
+              history.push(cum);
           });
 
-          // 2. Append session equity points if they are newer/different
-          const session = sessionEquity.filter(e => history.length === 0 || e !== history[history.length-1]);
-          return [...history, ...session];
+          // 2. Append session equity points (only if they differ from the last historical point)
+          const lastHist = history[history.length - 1];
+          const session = sessionEquity.filter(e => e !== lastHist);
+          
+          // 3. Always include current equity as the final point if we have account data
+          const finalCurve = [...history, ...session];
+          if (accountState?.equity && finalCurve[finalCurve.length-1] !== accountState.equity) {
+              finalCurve.push(accountState.equity);
+          }
+          
+          return finalCurve;
       })();
 
       return (
@@ -2282,7 +2297,7 @@ export default function NhestTradingBot() {
                    
                    <div className="flex-1 w-full relative">
                        {displayCurve.length >= 2 ? (
-                           <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                           <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                                <defs>
                                    <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
                                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.2"/>
@@ -2291,21 +2306,23 @@ export default function NhestTradingBot() {
                                </defs>
                                {/* Grid */}
                                {[0, 25, 50, 75, 100].map(y => (
-                                   <line key={y} x1="0" y1={`${y}%`} x2="100%" y2={`${y}%`} stroke="#1e293b" strokeWidth="1" />
+                                   <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="#1e293b" strokeWidth="0.5" />
                                ))}
                                {(() => {
                                    const max = Math.max(...displayCurve);
                                    const min = Math.min(...displayCurve);
-                                   const range = max - min || 1;
+                                   const range = (max - min) || 1;
+                                   
                                    const points = displayCurve.map((val, i) => {
                                        const x = (i / (displayCurve.length - 1)) * 100;
-                                       const y = 100 - ((val - min) / range) * 80 - 10;
-                                       return `${x}%,${y}%`;
+                                       const y = 90 - ((val - min) / range) * 80; // Scale to fit in 10-90 range for padding
+                                       return `${x.toFixed(2)},${y.toFixed(2)}`;
                                    }).join(' ');
+                                   
                                    return (
                                        <>
-                                        <polyline fill="none" stroke="#10b981" strokeWidth="3" points={points} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-                                        <polygon points={`${points} 100%,100% 0%,100%`} fill="url(#curveGradient)" />
+                                        <polyline fill="none" stroke="#10b981" strokeWidth="2" points={points} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                                        <polygon points={`${points} 100,100 0,100`} fill="url(#curveGradient)" />
                                        </>
                                    );
                                })()}
