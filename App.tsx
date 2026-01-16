@@ -2175,6 +2175,26 @@ export default function NhestTradingBot() {
           symPerformance[t.symbol] = (symPerformance[t.symbol] || 0) + (t.pnl || 0);
       });
 
+      // --- IMPROVED: Cumulative Performance Curve Logic ---
+      const displayCurve = (() => {
+          // 1. Build historical baseline from closed trades
+          const sorted = [...trades].sort((a,b) => {
+              const timeA = typeof a.time === 'string' ? new Date(a.time).getTime() : a.time;
+              const timeB = typeof b.time === 'string' ? new Date(b.time).getTime() : b.time;
+              return timeA - timeB;
+          });
+          
+          let cum = accountState ? accountState.balance - trades.reduce((acc, t) => acc + (t.pnl || 0), 0) : 0;
+          const history = sorted.map(t => {
+              cum += (t.pnl || 0);
+              return cum;
+          });
+
+          // 2. Append session equity points if they are newer/different
+          const session = sessionEquity.filter(e => history.length === 0 || e !== history[history.length-1]);
+          return [...history, ...session];
+      })();
+
       return (
       <div className="space-y-6 animate-in fade-in pb-20">
            <div className="flex justify-between items-end">
@@ -2261,7 +2281,7 @@ export default function NhestTradingBot() {
                    </div>
                    
                    <div className="flex-1 w-full relative">
-                       {sessionEquity.length > 2 ? (
+                       {displayCurve.length >= 2 ? (
                            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
                                <defs>
                                    <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2274,11 +2294,11 @@ export default function NhestTradingBot() {
                                    <line key={y} x1="0" y1={`${y}%`} x2="100%" y2={`${y}%`} stroke="#1e293b" strokeWidth="1" />
                                ))}
                                {(() => {
-                                   const max = Math.max(...sessionEquity);
-                                   const min = Math.min(...sessionEquity);
+                                   const max = Math.max(...displayCurve);
+                                   const min = Math.min(...displayCurve);
                                    const range = max - min || 1;
-                                   const points = sessionEquity.map((val, i) => {
-                                       const x = (i / (sessionEquity.length - 1)) * 100;
+                                   const points = displayCurve.map((val, i) => {
+                                       const x = (i / (displayCurve.length - 1)) * 100;
                                        const y = 100 - ((val - min) / range) * 80 - 10;
                                        return `${x}%,${y}%`;
                                    }).join(' ');
@@ -2293,7 +2313,7 @@ export default function NhestTradingBot() {
                        ) : (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-2 bg-slate-900/20 rounded-xl border border-slate-800 border-dashed">
                                 <Activity className="w-8 h-8 opacity-50 animate-pulse" />
-                                <span className="text-xs font-mono">INSFFICIENT DATA FOR CURVE RENDERING</span>
+                                <span className="text-xs font-mono">INSUFFICIENT DATA FOR CURVE RENDERING</span>
                             </div>
                        )}
                    </div>
