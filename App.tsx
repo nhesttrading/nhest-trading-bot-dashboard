@@ -138,6 +138,19 @@ export default function NhestTradingBot() {
                       addLog('success', 'SYS', 'Telemetry Synced');
                   }
               }
+
+              const rRes = await fetch(`${apiUrl}/api/risk`, { 
+                  mode: 'cors',
+                  headers: { 'ngrok-skip-browser-warning': 'true' }
+              });
+              if (rRes.ok) {
+                  const data = await rRes.json();
+                  if (data.riskPerStack) setRiskPerStack(data.riskPerStack);
+                  if (data.dailyMaxLoss) setDailyMaxLoss(data.dailyMaxLoss);
+                  if (data.maxDrawdown) setMaxDrawdown(data.maxDrawdown);
+                  if (data.autoPause !== undefined) setAutoPause(data.autoPause);
+                  addLog('success', 'SYS', 'Risk Parameters Loaded');
+              }
           } catch (e: any) { 
               console.warn("Tunnel Prime Note:", e); 
           } finally {
@@ -475,6 +488,18 @@ export default function NhestTradingBot() {
             if (data.status === 'ONLINE' || data.status === 'CONNECTED') {
                 if (!bridgeConnected) setBridgeConnected(true);
             }
+            // Ensure pending orders are tracked if present
+            if (data.pending_orders) {
+                // The UI logic already derives pendingOrders from accountState.pending_orders
+            }
+        });
+
+        socket.on('risk_update', (data: any) => {
+            if (data.riskPerStack) setRiskPerStack(data.riskPerStack);
+            if (data.dailyMaxLoss) setDailyMaxLoss(data.dailyMaxLoss);
+            if (data.maxDrawdown) setMaxDrawdown(data.maxDrawdown);
+            if (data.autoPause !== undefined) setAutoPause(data.autoPause);
+            addLog('info', 'SYS', 'Risk parameters updated by another client');
         });
     }, 1000);
 
@@ -923,9 +948,8 @@ export default function NhestTradingBot() {
       setRiskAuditLoading(false);
   };
 
-  const handleSaveRisk = () => {
+  const handleSaveRisk = async () => {
       if (!confirm("Update risk parameters on engine? This will immediately affect live protection logic.")) return;
-      if (!socketRef.current?.connected) return addLog('error', 'NET', 'Socket not connected');
       
       const config = {
           riskPerStack,
@@ -933,9 +957,27 @@ export default function NhestTradingBot() {
           maxDrawdown,
           autoPause
       };
-      
-      socketRef.current.emit('update_risk', config);
-      addLog('success', 'RISK', 'Risk configuration sent to engine');
+
+      try {
+          const res = await fetch(`${apiUrl}/api/risk`, { 
+              method: 'POST', 
+              headers: { 
+                  "Content-Type": "application/json",
+              },
+              body: JSON.stringify(config)
+          });
+          
+          if (res.ok) {
+              addLog('success', 'RISK', 'Risk configuration saved to engine');
+              if (socketRef.current?.connected) {
+                  socketRef.current.emit('update_risk', config);
+              }
+          } else {
+              addLog('error', 'RISK', 'Failed to save risk to server');
+          }
+      } catch (e) {
+          addLog('error', 'API', 'Network error saving risk configuration');
+      }
   };
 
   const handleUpdateApiUrl = (newUrl: string) => {
