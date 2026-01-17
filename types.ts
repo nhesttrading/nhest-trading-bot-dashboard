@@ -17,6 +17,7 @@ export interface TradeEntry {
 export interface SymbolState {
   trend_bias: TrendBias;
   status: Status;
+  market_open?: boolean; // New field to track if market is open
   entry_count: number;
   entries: TradeEntry[];
   hma_values: Record<string, number>;

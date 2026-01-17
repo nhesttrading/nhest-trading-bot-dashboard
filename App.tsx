@@ -28,6 +28,7 @@ import { ConfluenceMatrix } from './components/ConfluenceMatrix';
 import { MarketScanner } from './components/MarketScanner';
 import { SessionClock } from './components/SessionClock';
 import { MosaicGrid } from './components/MosaicGrid';
+import { WatchList } from './components/WatchList';
 
 const DEFAULT_SYMBOL_STATE: SymbolState = {
   trend_bias: 'NONE',
@@ -46,11 +47,6 @@ export default function NhestTradingBot() {
   const [apiUrl, setApiUrl] = useState(() => {
     const saved = localStorage.getItem('nhest_api_url');
     if (saved) return saved;
-    
-    // Auto-detect local engine if UI is local
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-        return 'http://127.0.0.1:8000';
-    }
     
     return DEFAULT_API_URL;
   });
@@ -1155,7 +1151,15 @@ export default function NhestTradingBot() {
     </div>
   );
 
-  const renderManual = () => (
+  const renderManual = () => {
+      // Dynamically aggregate all available symbols from Config, State, and Market Data
+      const allSymbols = Array.from(new Set([
+          ...UNIVERSE, 
+          ...Object.keys(strategyState.symbols), 
+          ...Object.keys(marketPrices)
+      ])).sort();
+
+      return (
       <div className="space-y-6 animate-in fade-in h-full flex flex-col">
           <div className="flex justify-between items-center">
              <div>
@@ -1175,7 +1179,7 @@ export default function NhestTradingBot() {
                         <Monitor className="w-4 h-4 text-slate-400" /> Asset Universe
                    </h3>
                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto custom-scrollbar flex-1 p-1">
-                       {UNIVERSE.map(symbol => {
+                       {allSymbols.map(symbol => {
                            const price = marketPrices[symbol];
                            const isSelected = selectedSymbol === symbol;
                            const state = strategyState.symbols[symbol];
@@ -1302,6 +1306,7 @@ export default function NhestTradingBot() {
           </div>
       </div>
   );
+  };
 
   const renderPortfolio = () => {
     // Determine JSON formatting colors
@@ -2742,30 +2747,41 @@ export default function NhestTradingBot() {
              </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar relative">
-             {activeView === 'dashboard' && renderDashboard()}
-             {activeView === 'portfolio' && renderPortfolio()}
-             {activeView === 'manual' && renderManual()}
-             {activeView === 'strategy' && renderStrategy()}
-             {activeView === 'risk' && renderRisk()}
-             {activeView === 'trades' && renderTrades()}
-             {activeView === 'history' && <RecentTrades 
-                 activePositions={activePositions} 
-                 closedTrades={closedTrades} 
-                 logs={logs} 
-                 onClearHistory={() => {
-                     if(confirm('Clear persistent trade history?')) {
-                         updateHistory([]);
-                     }
-                 }}
-             />}
-             {activeView === 'market' && renderMarket()}
-             {activeView === 'signals' && renderSignals()}
-             {activeView === 'automation' && renderAutomation()}
-             {activeView === 'logs' && renderLogs()}
-             {activeView === 'ai' && renderAI()}
-             {activeView === 'analytics' && renderAnalytics()}
-             {activeView === 'settings' && renderSettings()}
+        <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar relative">
+                 {activeView === 'dashboard' && renderDashboard()}
+                 {activeView === 'portfolio' && renderPortfolio()}
+                 {activeView === 'manual' && renderManual()}
+                 {activeView === 'strategy' && renderStrategy()}
+                 {activeView === 'risk' && renderRisk()}
+                 {activeView === 'trades' && renderTrades()}
+                 {activeView === 'history' && <RecentTrades 
+                     activePositions={activePositions} 
+                     closedTrades={closedTrades} 
+                     logs={logs} 
+                     onClearHistory={() => {
+                         if(confirm('Clear persistent trade history?')) {
+                             updateHistory([]);
+                         }
+                     }}
+                 />}
+                 {activeView === 'market' && renderMarket()}
+                 {activeView === 'signals' && renderSignals()}
+                 {activeView === 'automation' && renderAutomation()}
+                 {activeView === 'logs' && renderLogs()}
+                 {activeView === 'ai' && renderAI()}
+                 {activeView === 'analytics' && renderAnalytics()}
+                 {activeView === 'settings' && renderSettings()}
+            </div>
+            
+            <div className="hidden lg:block h-full border-l border-slate-800 bg-[#020617] w-64">
+                <WatchList 
+                    prices={marketPrices} 
+                    strategyState={strategyState} 
+                    selectedSymbol={selectedSymbol} 
+                    onSelect={handleSymbolChange} 
+                />
+            </div>
         </div>
       </main>
     </div>

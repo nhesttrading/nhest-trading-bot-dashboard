@@ -31,7 +31,7 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
 
   // Update history on tick
   useEffect(() => {
-    if (currentPrice !== undefined && currentPrice !== null) {
+    if (currentPrice !== undefined && currentPrice !== null && symbolState?.market_open !== false) {
         const now = Date.now();
         const hmas = symbolState?.hma_values || {};
         const entry = { price: currentPrice, hmas, time: now };
@@ -221,6 +221,23 @@ export const LiveChart: React.FC<LiveChartProps> = ({ isActive, trendBias, symbo
       ctx.fillStyle = '#0f172a';
       ctx.font = 'bold 11px "JetBrains Mono", monospace';
       ctx.fillText(lastPrice.toFixed(2), width - 50, lastY + 4);
+
+      // 5. Market Closed Overlay
+      if (symbolState?.market_open === false) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.4)';
+          ctx.fillRect(0, 0, width, height);
+          
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 14px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText("MARKET CLOSED", width/2, height/2);
+          
+          ctx.fillStyle = '#64748b';
+          ctx.font = '10px "JetBrains Mono", monospace';
+          ctx.fillText("WAITING FOR SESSION START", width/2, height/2 + 20);
+          ctx.restore();
+      }
 
       animationFrameId = requestAnimationFrame(render);
     };
