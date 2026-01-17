@@ -7,7 +7,8 @@ import {
   Workflow, History, ArrowRight, Code, Database, Server,
   Sliders, Cpu, Upload, FileJson, Share2, Copy, MousePointerClick,
   TrendingUp, TrendingDown, Activity, Radio, Menu,
-  Target, BarChart3, PieChart, Clock, Calendar, Gauge, Award, ShieldAlert, ZapOff, Fingerprint
+  Target, BarChart3, PieChart, Clock, Calendar, Gauge, Award, ShieldAlert, ZapOff, Fingerprint,
+  List
 } from 'lucide-react';
 import { 
   StrategyState, LogEntry, MarketPrices, ActivePosition, 
@@ -311,6 +312,7 @@ export default function NhestTradingBot() {
   // UI State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isWatchListOpen, setIsWatchListOpen] = useState(false);
   const [activeTradesTab, setActiveTradesTab] = useState<'active' | 'pending'>('active');
 
   const handleLogout = () => {
@@ -2664,6 +2666,16 @@ export default function NhestTradingBot() {
             </button>
         </div>
       )}
+
+      {/* Mobile Watchlist Floating Toggle */}
+      {!isWatchListOpen && (
+          <button 
+            onClick={() => setIsWatchListOpen(true)}
+            className="lg:hidden fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-slate-900/80 backdrop-blur border-l border-y border-slate-700 p-2 rounded-l-xl text-emerald-500 shadow-xl border-emerald-500/20"
+          >
+            <List className="w-5 h-5" />
+          </button>
+      )}
       
       <main className="flex-1 overflow-hidden flex flex-col relative w-full">
         <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur flex items-center justify-between px-4 md:px-6 flex-none z-10">
@@ -2692,6 +2704,15 @@ export default function NhestTradingBot() {
                  </div>
              </div>
              <div className="flex items-center gap-4">
+                 {/* Mobile WatchList Toggle */}
+                 <button 
+                    onClick={() => setIsWatchListOpen(true)}
+                    className="lg:hidden p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                    title="Open Watchlist"
+                 >
+                    <List className="w-5 h-5" />
+                 </button>
+
                  <div className="text-right hidden sm:block">
                      <div className="text-xs text-slate-400">Est. Unrealized PnL</div>
                      <div className={`text-sm font-bold font-mono ${totalUnrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -2774,13 +2795,35 @@ export default function NhestTradingBot() {
                  {activeView === 'settings' && renderSettings()}
             </div>
             
-            <div className="hidden lg:block h-full border-l border-slate-800 bg-[#020617] w-64">
-                <WatchList 
-                    prices={marketPrices} 
-                    strategyState={strategyState} 
-                    selectedSymbol={selectedSymbol} 
-                    onSelect={handleSymbolChange} 
-                />
+            {/* WatchList Sidebar */}
+            <div className={`
+                ${isWatchListOpen ? 'fixed inset-0 z-[60] flex justify-end bg-black/60 backdrop-blur-sm' : 'hidden lg:block'} 
+                lg:relative lg:inset-auto lg:z-0 lg:h-full lg:w-64 border-l border-slate-800 bg-[#020617]
+            `} onClick={() => setIsWatchListOpen(false)}>
+                <div 
+                    className={`
+                        ${isWatchListOpen ? 'w-72 h-full bg-[#020617] shadow-2xl animate-in slide-in-from-right duration-300' : 'h-full w-full'}
+                    `}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <WatchList 
+                        prices={marketPrices} 
+                        strategyState={strategyState} 
+                        selectedSymbol={selectedSymbol} 
+                        onSelect={(s) => {
+                            handleSymbolChange(s);
+                            setIsWatchListOpen(false);
+                        }} 
+                    />
+                    {isWatchListOpen && (
+                        <button 
+                            onClick={() => setIsWatchListOpen(false)}
+                            className="absolute top-3 right-3 p-1.5 bg-slate-800 rounded-lg text-slate-400 hover:text-white lg:hidden border border-slate-700"
+                        >
+                            <XCircle className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
       </main>
